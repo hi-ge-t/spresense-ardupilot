@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "upstream": {
+    "vehicle": "Copter",
+    "tag": "Copter-4.7.0",
+    "commit": "1511f27194f1dcc3728270883047bdf022b3fd53"
+  },
+  "sdk": {
+    "remote": "https://github.com/sonydevworld/spresense.git",
+    "commit": "7fd61b2c03f06a4ff0302b84c755e58c338788b2"
+  },
+  "target": {
+    "board": "Sony Spresense CXD5602",
+    "os": "Sony Spresense SDK NuttX",
+    "profile": "spresense-m1-output-disabled"
+  },
+  "gnss": {
+    "builtin": "disabled",
+    "addon": "required",
+    "device": "/dev/gps2",
+    "ram": "required"
+  },
+  "safety": {
+    "arming": "guard-always-reject",
+    "actuator_driver": "absent",
+    "outputs": "disabled",
+    "physical_write_expected": 0
+  },
+  "storage": {
+    "development": "microSD",
+    "development_path": "/mnt/sd0/APM/ardupilot.stg",
+    "final_candidate": "eMMC",
+    "automatic_fallback": "disabled"
+  },
+  "distribution": {
+    "license": "GPL-3.0-or-later",
+    "binary": "disabled",
+    "source_remote": "https://github.com/hi-ge-t/spresense-ardupilot"
+  },
+  "evidence": {
+    "host_contract": "required",
+    "sony_object_compile": "required",
+    "sony_copter_link": "HOLD",
+    "copter_arming_path": "HOLD",
+    "spresense_boot": "HOLD",
+    "sensor_read": "HOLD",
+    "flight": "out-of-scope"
+  }
+}
