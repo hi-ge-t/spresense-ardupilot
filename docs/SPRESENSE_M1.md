@@ -103,17 +103,21 @@ all four diagnostic parameters, a denied ARM acknowledgement and a later
 non-armed heartbeat. QGroundControl is opened separately after this gate to
 confirm that an installed GCS discovers the same vehicle.
 
+The first hardware run was completed on 2026-08-01. The committed evidence
+summary is `docs/evidence/SPRESENSE_M1_GCS_20260801.md`; generated firmware and
+the detailed runtime JSON remain ignored build artifacts.
+
 ## Evidence and HOLD items
 
-| Item | Status before hardware run | Evidence or remaining check |
+| Item | Status | Evidence or remaining check |
 |---|---|---|
-| AP_HAL host contract | Implemented | `run_host_tests.py` |
-| MAVLink protocol host contract | Implemented | heartbeat/version/parameters/ARM denial, physical writes 0 |
-| Sony SDK/NuttX object compile | Implemented | Sony GCC 10.3.1 |
-| Sony SDK diagnostic firmware link/SPK | Implemented | `build_m1_gcs_firmware.py` |
-| Application/GNSS RAM linker boundaries | Implemented | `memory-layout.json`; runtime timing remains unqualified |
-| Spresense boot and bidirectional serial GCS | HOLD | clean flash and serial gate required |
-| QGroundControl discovery | HOLD | UI confirmation after deterministic gate |
+| AP_HAL host contract | Confirmed | `run_host_tests.py` PASS on 2026-08-01 |
+| MAVLink protocol host contract | Confirmed | heartbeat/version/parameters/ARM denial, physical writes 0 |
+| Sony SDK/NuttX object compile | Confirmed | clean build with Sony GCC 10.3.1 |
+| Sony SDK diagnostic firmware link/SPK | Confirmed | `build_m1_gcs_firmware.py` PASS at `ec88bc958b...` |
+| Application/GNSS RAM linker boundaries | Confirmed | `memory-layout.json`; runtime timing remains unqualified |
+| Spresense boot and bidirectional serial GCS | Confirmed, one bench run | `M1GCS001`, four parameters and ARM `DENIED` on 2026-08-01 |
+| QGroundControl discovery | Confirmed, one bench run | QGroundControl 5.0.8 displayed ArduPilot / Not Ready |
 | Full Sony NuttX Copter link | HOLD | future M1 slice; this image is not Copter |
 | GNSS Add-on read in this image | HOLD | profile is configured, but this image does not yet publish GNSS data |
 | Multi-IMU coexistence | HOLD | Multi-IMU is currently removed |

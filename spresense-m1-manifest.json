@@ -53,9 +53,10 @@
     "linker_map_guard": "required",
     "sony_copter_link": "HOLD",
     "copter_arming_path": "HOLD",
-    "spresense_gcs_runtime": "HOLD",
-    "qgroundcontrol_runtime": "HOLD",
-    "spresense_boot": "HOLD",
+    "spresense_gcs_runtime": "confirmed-single-bench-run-2026-08-01",
+    "qgroundcontrol_runtime": "confirmed-single-bench-run-2026-08-01",
+    "spresense_boot": "confirmed-single-bench-run-2026-08-01",
+    "runtime_record": "docs/evidence/SPRESENSE_M1_GCS_20260801.md",
     "sensor_read": "HOLD",
     "flight": "out-of-scope"
   }
