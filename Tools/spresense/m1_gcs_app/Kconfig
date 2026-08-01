@@ -1,0 +1,34 @@
+config SPRESENSE_M1_GCS
+	tristate "Spresense M1 output-disabled MAVLink GCS bring-up"
+	default n
+	depends on CXD56_GNSS_RAM && CXD56_GNSS_HEAP
+	depends on CXD56_GNSS_ADDON && SENSORS_CXD5610_GNSS
+	depends on !CXD56_GNSS
+	---help---
+		Build the dedicated main-USB MAVLink diagnostic used to prove
+		bidirectional GCS transport before Copter is linked. This target has
+		no actuator backend and rejects every arming request.
+
+if SPRESENSE_M1_GCS
+
+config SPRESENSE_M1_GCS_PROGNAME
+	string "Program name"
+	default "spresense_m1_gcs"
+
+config SPRESENSE_M1_GCS_PRIORITY
+	int "Runtime task priority"
+	default 100
+
+config SPRESENSE_M1_GCS_STACKSIZE
+	int "Runtime task stack size"
+	default 8192
+
+config SPRESENSE_M1_GCS_DEVICE
+	string "Dedicated MAVLink serial device"
+	default "/dev/ttyS0"
+
+config SPRESENSE_M1_GCS_BAUD
+	int "MAVLink baud rate"
+	default 115200
+
+endif

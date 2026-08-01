@@ -9,6 +9,8 @@ import subprocess
 import sys
 import tempfile
 
+from mavlink_headers import generate
+
 
 def main() -> int:
     root = Path(__file__).resolve().parents[2]
@@ -64,6 +66,26 @@ def main() -> int:
                 str(adapter_object),
             ]
             subprocess.run(adapter_command, cwd=root, check=True)
+
+        mavlink_headers = generate(root)
+        gcs_binary = temporary_path / "test_m1_gcs_protocol"
+        gcs_command = [
+            os.environ.get("CC") or shutil.which("cc") or "cc",
+            "-std=c11",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-I",
+            str(mavlink_headers),
+            "-I",
+            str(root / "Tools/spresense/m1_gcs_app"),
+            str(root / "Tools/spresense/m1_gcs_app/m1_gcs_protocol.c"),
+            str(root / "Tools/spresense/tests/test_m1_gcs_protocol.c"),
+            "-o",
+            str(gcs_binary),
+        ]
+        subprocess.run(gcs_command, cwd=root, check=True)
+        subprocess.run([str(gcs_binary)], cwd=root, check=True)
 
     subprocess.run(
         [sys.executable, str(root / "Tools/spresense/verify_m1_contract.py")],

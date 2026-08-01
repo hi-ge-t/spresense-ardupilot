@@ -1,71 +1,123 @@
-# Spresense M1 output-disabled bring-up
+# Spresense M1 output-disabled GCS bring-up
 
-## Scope
+## Scope and current boundary
 
-This fork starts an experimental `AP_HAL_Spresense` lane from upstream
+This fork starts an experimental Sony Spresense lane from upstream
 `Copter-4.7.0`, commit `1511f27194f1dcc3728270883047bdf022b3fd53`.
-It is a bring-up implementation, not flight firmware.
+It is not flight firmware.
 
-The first slice registers the compile-time `HAL_BOARD_SPRESENSE` identity and
-implements host-verifiable primitives and AP_HAL interface
-adapters for a NuttX console byte stream, monotonic time, fixed-file storage and
-a fail-closed RC output guard. It does not yet add a Sony SDK waf toolchain,
-link Copter for Sony NuttX, or boot on Spresense. Timer/IO process registration
-deliberately marks the scheduler unhealthy until the Sony NuttX task
-implementation is added.
+M1 now contains two separate software slices:
 
-## Fixed safety contract
+1. `AP_HAL_Spresense` host-verifiable console, UART, monotonic-time, storage,
+   scheduler and fail-closed RC-output primitives.
+2. A Sony SDK/NuttX `spresense-m1-gcs` diagnostic image that proves the future
+   main-USB MAVLink boundary before Copter is linked.
 
-- The M1 guard rejects every arming request; the Copter arming path is not yet linked.
-- Actuator, PWM, DShot and CAN output drivers are absent.
-- Output write requests are counted and rejected without a physical write.
-- Built-in GNSS is disabled; the CXD5610 GNSS Add-on at `/dev/gps2` is required.
-- GNSS RAM is required by the future target profile.
-- Development storage is microSD. eMMC remains the final candidate.
-- There is no automatic storage or GNSS fallback.
-- Firmware binaries are not distributed from this stage.
+The diagnostic uses the ArduPilot-pinned `ardupilotmega` MAVLink v2 definition
+and identifies as `MAV_AUTOPILOT_ARDUPILOTMEGA`/quadrotor. It sends a 1 Hz
+HEARTBEAT, answers `AUTOPILOT_VERSION`, exposes four fixed read-only diagnostic
+parameters and rejects `MAV_CMD_COMPONENT_ARM_DISARM`. This identity exists to
+exercise a real GCS connection; the image does not contain Copter control,
+navigation, sensor fusion or flight modes.
 
-The machine-readable contract is `spresense-m1-manifest.json`. Run:
+## Fixed safety and platform contract
+
+- Every ARM request is answered with `MAV_RESULT_DENIED`.
+- No actuator, PWM, DShot or CAN output backend is linked. Sony/NuttX PWM is
+  disabled in the target configuration.
+- The built-in GNSS is disabled. The CXD5610 GNSS Add-on at `/dev/gps2` and
+  GNSS RAM remain mandatory profile requirements.
+- The main-board CP2102N UART is `/dev/ttyS0` at 115200 baud. NSH, CDC-ACM and
+  USB mass storage commands are disabled so text cannot corrupt MAVLink.
+- Development storage remains microSD and the final candidate remains eMMC.
+  No automatic storage fallback is introduced by this slice.
+- Generated firmware artifacts stay under ignored `build/`; binaries are not
+  committed or distributed from this stage.
+
+The machine-readable contract is `spresense-m1-manifest.json`.
+
+## Reproducible host and Sony SDK verification
+
+Initialize the pinned submodules:
+
+```sh
+git submodule update --init --recursive modules/Spresense modules/mavlink
+```
+
+Run the AP_HAL and MAVLink host contracts:
 
 ```sh
 python3 Tools/spresense/run_host_tests.py
 ```
 
-Initialize the pinned Sony SDK and generate the GNSS Add-on/GNSS RAM context:
+With Sony GCC 10.3.1 installed at `~/spresenseenv/usr/bin`, build a clean
+flashable image:
 
 ```sh
-git submodule update --init --recursive modules/Spresense
-(cd modules/Spresense/sdk && python3 tools/config.py default feature/gnss_addon)
-make -C modules/Spresense/nuttx -j1 context
+python3 Tools/spresense/build_m1_gcs_firmware.py
 ```
 
-Then, with Sony GCC 10.3.1 on `PATH`, compile the M1 sources against the pinned
-Spresense/NuttX headers:
+The build creates `build/spresense-m1-gcs-artifacts/` containing `nuttx.spk`,
+ELF, linker map, NuttX configuration, a machine-readable memory report and an
+`ARTIFACTS.manifest` with SHA-256 values. The build fails unless all of these
+conditions hold:
+
+- Sony SDK and MAVLink commits match the pinned revisions;
+- built-in GNSS and PWM are disabled;
+- GNSS Add-on, GNSS RAM and GNSS heap are enabled;
+- the main-USB serial/autostart configuration matches the fixed profile;
+- `spresense_main` is one unique strong symbol;
+- Application SRAM and GNSS RAM code/rodata/data/bss/heap boundaries are
+  non-empty and remain inside their linker regions.
+
+`--allow-dirty` exists only for development. Its manifest says
+`project_tree=dirty`, and the flash guard refuses it.
+
+## Hardware and GCS procedure
+
+Close QGroundControl and every serial terminal before preflight. On macOS use
+only the single `/dev/cu.*` path belonging to the Spresense main-board CP2102N.
 
 ```sh
-python3 Tools/spresense/cross_compile_m1.py
+SPFC_ARTIFACT_DIR="$PWD/build/spresense-m1-gcs-artifacts" \
+SPFC_PROFILE=spresense-m1-gcs \
+  Tools/flash_spresense.sh /dev/cu.usbserial-210 --preflight
 ```
 
-## Evidence status
+After checking the printed full commit, install with the same variables plus
+`SPFC_FLASH_ACK=FULL_COMMIT` and `--execute`. The normal MainCore SPK path uses
+DTR reset and `--no-set-bootable`. Accept the run only if Sony prints package
+validation, save and restart completion and the guard prints `flash=COMPLETE`.
 
-| Item | Status | Evidence or next check |
+Then run the deterministic bidirectional GCS gate:
+
+```sh
+python3 Tools/spresense/m1_gcs_serial_check.py \
+  --port /dev/cu.usbserial-210 \
+  --verify-arm-denied \
+  --output build/spresense-m1-gcs-artifacts/runtime-evidence.json
+```
+
+This gate requires an ArduPilot heartbeat, `M1GCS001` AUTOPILOT_VERSION,
+all four diagnostic parameters, a denied ARM acknowledgement and a later
+non-armed heartbeat. QGroundControl is opened separately after this gate to
+confirm that an installed GCS discovers the same vehicle.
+
+## Evidence and HOLD items
+
+| Item | Status before hardware run | Evidence or remaining check |
 |---|---|---|
-| Host C++ compile and contract test | Implemented | `run_host_tests.py` |
-| Output and arming rejection | Implemented on host | physical write count must remain zero |
-| Copter arming integration | HOLD | no linked Copter arming path yet |
-| Sony SDK/NuttX object compile | Implemented | 5 objects, Sony GCC 10.3.1, SDK `7fd61b2c` |
-| Sony SDK/NuttX Copter link | HOLD | add waf/SDK link integration |
-| Linker map for Application/GNSS RAM | HOLD | reuse the measured M0 memory contract in the target linker |
-| Console, UART, storage on Spresense | HOLD | output-disabled hardware run required |
-| GNSS Add-on and IMU coexistence | HOLD | Multi-IMU is currently removed |
-| Timing, GNSS accuracy, stability, flight | HOLD/out of scope | not claimed by this implementation |
-
-## Next implementation slice
-
-1. Add a Sony SDK-backed waf board and NuttX task dispatch.
-2. Link the smallest ArduPilot library example before attempting Copter.
-3. Save the Application SRAM/GNSS RAM linker map and apply fixed limits before
-   the first hardware boot.
+| AP_HAL host contract | Implemented | `run_host_tests.py` |
+| MAVLink protocol host contract | Implemented | heartbeat/version/parameters/ARM denial, physical writes 0 |
+| Sony SDK/NuttX object compile | Implemented | Sony GCC 10.3.1 |
+| Sony SDK diagnostic firmware link/SPK | Implemented | `build_m1_gcs_firmware.py` |
+| Application/GNSS RAM linker boundaries | Implemented | `memory-layout.json`; runtime timing remains unqualified |
+| Spresense boot and bidirectional serial GCS | HOLD | clean flash and serial gate required |
+| QGroundControl discovery | HOLD | UI confirmation after deterministic gate |
+| Full Sony NuttX Copter link | HOLD | future M1 slice; this image is not Copter |
+| GNSS Add-on read in this image | HOLD | profile is configured, but this image does not yet publish GNSS data |
+| Multi-IMU coexistence | HOLD | Multi-IMU is currently removed |
+| Timing, GNSS accuracy, stability and flight | HOLD/out of scope | no claim is made by this implementation |
 
 This work was produced with AI assistance and requires human review before any
 upstream submission or hardware use.

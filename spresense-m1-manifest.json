@@ -12,7 +12,7 @@
   "target": {
     "board": "Sony Spresense CXD5602",
     "os": "Sony Spresense SDK NuttX",
-    "profile": "spresense-m1-output-disabled"
+    "profile": "spresense-m1-gcs"
   },
   "gnss": {
     "builtin": "disabled",
@@ -25,6 +25,15 @@
     "actuator_driver": "absent",
     "outputs": "disabled",
     "physical_write_expected": 0
+  },
+  "gcs": {
+    "transport": "/dev/ttyS0",
+    "baud": 115200,
+    "mavlink": "ArduPilot pinned ardupilotmega v2",
+    "heartbeat": "MAV_AUTOPILOT_ARDUPILOTMEGA",
+    "parameter_surface": "fixed-read-only-diagnostic",
+    "arm_command": "always-denied",
+    "full_copter": false
   },
   "storage": {
     "development": "microSD",
@@ -40,8 +49,12 @@
   "evidence": {
     "host_contract": "required",
     "sony_object_compile": "required",
+    "sony_gcs_firmware_link": "required",
+    "linker_map_guard": "required",
     "sony_copter_link": "HOLD",
     "copter_arming_path": "HOLD",
+    "spresense_gcs_runtime": "HOLD",
+    "qgroundcontrol_runtime": "HOLD",
     "spresense_boot": "HOLD",
     "sensor_read": "HOLD",
     "flight": "out-of-scope"
