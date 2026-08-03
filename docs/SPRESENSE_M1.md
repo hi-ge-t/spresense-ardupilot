@@ -139,11 +139,13 @@ was obtained. QGroundControl is opened separately after this gate to confirm
 that an installed GCS discovers the same vehicle.
 
 The first hardware run was completed on 2026-08-01. The committed evidence
-summary is `docs/evidence/SPRESENSE_M1_GCS_20260801.md`; generated firmware and
-the detailed runtime JSON remain ignored build artifacts. That run used the
-GNSS-only profile with the Multi-IMU removed. It does not validate the new
-combined profile. The combined profile's software-only build record is
-`docs/evidence/SPRESENSE_M1_PWBIMU_GNSS_BUILD_20260803.md`.
+summary is `docs/evidence/SPRESENSE_M1_GCS_20260801.md`; that run used the
+GNSS-only profile with the Multi-IMU removed. The combined profile's
+software-only build record is
+`docs/evidence/SPRESENSE_M1_PWBIMU_GNSS_BUILD_20260803.md`. A single combined
+GNSS + Multi-IMU bench run was completed on 2026-08-03 and is recorded in
+`docs/evidence/SPRESENSE_M1_COMBINED_RUNTIME_20260803.md`. Generated firmware
+and the detailed runtime JSON remain ignored build artifacts.
 
 ## Evidence and HOLD items
 
@@ -152,15 +154,15 @@ combined profile. The combined profile's software-only build record is
 | AP_HAL host contract | Confirmed | `run_host_tests.py` PASS on 2026-08-01 |
 | MAVLink protocol host contract | Confirmed | heartbeat/version/parameters/ARM denial, physical writes 0 |
 | Sony SDK/NuttX object compile | Confirmed | clean build with Sony GCC 10.3.1 |
-| Sony SDK diagnostic firmware link/SPK | Confirmed | `build_m1_gcs_firmware.py` PASS at `ec88bc958b...` |
-| Combined GNSS + Multi-IMU SDK link/SPK | Confirmed, software only | driver symbols and guarded profile linked on 2026-08-03; hardware run remains HOLD |
+| Sony SDK diagnostic firmware link/SPK | Confirmed | combined and legacy profile clean builds passed at `ffa5071153...` |
+| Combined GNSS + Multi-IMU SDK link/SPK | Confirmed | driver symbols and guarded profile linked on 2026-08-03 |
 | Application/GNSS RAM linker boundaries | Confirmed | `memory-layout.json`; runtime timing remains unqualified |
 | Spresense boot and bidirectional serial GCS | Confirmed, one bench run | `M1GCS001`, four parameters and ARM `DENIED` on 2026-08-01 |
 | QGroundControl discovery | Confirmed, one bench run | QGroundControl 5.0.8 displayed ArduPilot / Not Ready |
 | Full Sony NuttX Copter link | HOLD | future M1 slice; this image is not Copter |
-| GNSS Add-on bounded sample | HOLD | implementation/cross-build must be followed by `M1_GNSS_OK=1` on hardware; fix and accuracy remain separate |
-| Multi-IMU startup sample | Confirmed, one bench run | `M1PIM001`, `M1_IMU_OK=1` on 2026-08-03; combined GNSS probe image still requires a new run |
-| Combined Add-on coexistence | HOLD | requires `M1PGN001`, `M1_GNSS_OK=1` and `M1_IMU_OK=1` from the same boot |
+| GNSS Add-on bounded sample | Confirmed, one bench run | `M1PGN001`, `M1_GNSS_OK=1`, `M1_GNSS_ERR=0`; fix, accuracy and latency remain HOLD |
+| Multi-IMU startup sample | Confirmed, one bench run | `M1PGN001`, `M1_IMU_OK=1` on 2026-08-03 |
+| Combined Add-on coexistence | Confirmed, one boot | `M1_GNSS_OK=1` and `M1_IMU_OK=1` from the same boot on 2026-08-03 |
 | Multi-IMU + final eMMC pin coexistence | HOLD | standard Multi-IMU profile uses SPI5 pins shared with eMMC; carrier design must resolve this without automatic fallback |
 | Timing, GNSS accuracy, stability and flight | HOLD/out of scope | no claim is made by this implementation |
 

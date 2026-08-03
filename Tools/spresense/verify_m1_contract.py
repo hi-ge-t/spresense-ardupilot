@@ -46,9 +46,11 @@ EXPECTED = {
     "evidence.sony_gcs_firmware_link": "required",
     "evidence.linker_map_guard": "required",
     "evidence.sony_copter_link": "HOLD",
-    "evidence.pwbimu_runtime": "HOLD",
-    "evidence.gnss_runtime": "HOLD",
-    "evidence.combined_addon_runtime": "HOLD",
+    "evidence.pwbimu_runtime": "confirmed-single-bench-run-2026-08-03",
+    "evidence.gnss_runtime": "confirmed-bounded-sample-single-bench-run-2026-08-03",
+    "evidence.combined_addon_runtime": "confirmed-single-boot-2026-08-03",
+    "evidence.gnss_fix": "HOLD",
+    "evidence.combined_runtime_record": "docs/evidence/SPRESENSE_M1_COMBINED_RUNTIME_20260803.md",
 }
 
 

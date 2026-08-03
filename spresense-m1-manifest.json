@@ -70,9 +70,11 @@
     "qgroundcontrol_runtime": "confirmed-single-bench-run-2026-08-01",
     "spresense_boot": "confirmed-single-bench-run-2026-08-01",
     "runtime_record": "docs/evidence/SPRESENSE_M1_GCS_20260801.md",
-    "pwbimu_runtime": "HOLD",
-    "gnss_runtime": "HOLD",
-    "combined_addon_runtime": "HOLD",
+    "pwbimu_runtime": "confirmed-single-bench-run-2026-08-03",
+    "gnss_runtime": "confirmed-bounded-sample-single-bench-run-2026-08-03",
+    "combined_addon_runtime": "confirmed-single-boot-2026-08-03",
+    "gnss_fix": "HOLD",
+    "combined_runtime_record": "docs/evidence/SPRESENSE_M1_COMBINED_RUNTIME_20260803.md",
     "flight": "out-of-scope"
   }
 }
