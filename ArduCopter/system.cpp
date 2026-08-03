@@ -549,14 +549,18 @@ void Copter::allocate_motors(void)
     default:
         break;
     }
+    spresense_init_marker("SPRESENSE_M1_MOTORS=FRAME_DEFAULTS_AFTER\n");
 
     // brushed 16kHz defaults to 16kHz pulses
     if (motors->is_brushed_pwm_type()) {
         g.rc_speed.set_default(16000);
     }
+    spresense_init_marker("SPRESENSE_M1_MOTORS=BRUSHED_AFTER\n");
     
     // upgrade parameters. This must be done after allocating the objects
+    spresense_init_marker("SPRESENSE_M1_MOTORS=PID_CONVERT_BEFORE\n");
     convert_pid_parameters();
+    spresense_init_marker("SPRESENSE_M1_MOTORS=PID_CONVERT_AFTER\n");
 #if FRAME_CONFIG == HELI_FRAME
     motors->heli_motors_param_conversions();
 #endif
@@ -567,16 +571,24 @@ void Copter::allocate_motors(void)
 #endif
 
     // upgrade attitude controller parameters
+    spresense_init_marker("SPRESENSE_M1_MOTORS=ATTITUDE_CONVERT_BEFORE\n");
     copter.attitude_control->convert_parameters();
+    spresense_init_marker("SPRESENSE_M1_MOTORS=ATTITUDE_CONVERT_AFTER\n");
 
     // upgrade position controller parameters
+    spresense_init_marker("SPRESENSE_M1_MOTORS=POS_CONVERT_BEFORE\n");
     copter.pos_control->convert_parameters();
+    spresense_init_marker("SPRESENSE_M1_MOTORS=POS_CONVERT_AFTER\n");
 
     // convert wp_nav parameters
+    spresense_init_marker("SPRESENSE_M1_MOTORS=WPNAV_CONVERT_BEFORE\n");
     copter.wp_nav->convert_parameters();
+    spresense_init_marker("SPRESENSE_M1_MOTORS=WPNAV_CONVERT_AFTER\n");
 
     // upgrade loiter navigation parameters
+    spresense_init_marker("SPRESENSE_M1_MOTORS=LOITER_CONVERT_BEFORE\n");
     loiter_nav->convert_parameters();
+    spresense_init_marker("SPRESENSE_M1_MOTORS=LOITER_CONVERT_AFTER\n");
 
 #if MODE_CIRCLE_ENABLED
     circle_nav->convert_parameters();
