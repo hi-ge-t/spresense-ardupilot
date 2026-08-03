@@ -22,6 +22,20 @@ class CheckError(RuntimeError):
 TRANSIENT_ZERO_READ = "device reports readiness to read but returned no data"
 
 
+def capture_bad_data(message, diagnostics: bytearray) -> bool:
+    if message is None or message.get_type() != "BAD_DATA":
+        return False
+    data = message.data
+    if isinstance(data, str):
+        data = data.encode("latin1", errors="replace")
+    else:
+        data = bytes(data)
+    diagnostics.extend(data)
+    if len(diagnostics) > 4096:
+        del diagnostics[:-4096]
+    return True
+
+
 def tolerate_transient_zero_reads(link) -> None:
     original_recv = link.recv
 
@@ -62,19 +76,24 @@ def read_manifest(path: Path) -> dict[str, str]:
     return values
 
 
-def wait_message(link, message_type, predicate, timeout):
+def wait_message(link, message_type, predicate, timeout, diagnostics):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        message = link.recv_match(type=message_type, blocking=True, timeout=0.5)
-        if message is not None and predicate(message):
+        message = link.recv_match(blocking=True, timeout=0.5)
+        if capture_bad_data(message, diagnostics):
+            continue
+        if (
+            message is not None and
+            message.get_type() == message_type and
+            predicate(message)
+        ):
             return message
     raise CheckError(f"timeout waiting for {message_type}")
 
 
-def wait_copter_startup(link, mavlink, timeout):
+def wait_copter_startup(link, mavlink, timeout, diagnostics):
     deadline = time.monotonic() + timeout
     heartbeat = None
-    boot_text = bytearray()
     marker = b"SPRESENSE_M1_COPTER_BOOT=LOOP\n"
     while time.monotonic() < deadline:
         message = link.recv_match(blocking=True, timeout=0.5)
@@ -86,16 +105,9 @@ def wait_copter_startup(link, mavlink, timeout):
             message.autopilot == mavlink.MAV_AUTOPILOT_ARDUPILOTMEGA
         ):
             heartbeat = message
-        elif message_type == "BAD_DATA":
-            data = message.data
-            if isinstance(data, str):
-                data = data.encode("latin1", errors="replace")
-            else:
-                data = bytes(data)
-            boot_text.extend(data)
-            if len(boot_text) > 512:
-                del boot_text[:-512]
-        if heartbeat is not None and marker in boot_text:
+        else:
+            capture_bad_data(message, diagnostics)
+        if heartbeat is not None and marker in diagnostics:
             return heartbeat
     if heartbeat is None:
         raise CheckError("timeout waiting for Copter heartbeat")
@@ -119,7 +131,9 @@ def check_port(port: str) -> None:
         raise CheckError(f"serial port is already open: {port}")
 
 
-def request_arm(link, mavlink, system, component, force_value):
+def request_arm(
+    link, mavlink, system, component, force_value, diagnostics
+):
     link.mav.command_long_send(
         system,
         component,
@@ -141,6 +155,7 @@ def request_arm(link, mavlink, system, component, force_value):
             value.command == mavlink.MAV_CMD_COMPONENT_ARM_DISARM
         ),
         5.0,
+        diagnostics,
     )
     if acknowledgement.result != mavlink.MAV_RESULT_FAILED:
         raise CheckError(
@@ -152,13 +167,16 @@ def request_arm(link, mavlink, system, component, force_value):
         "HEARTBEAT",
         lambda value: value.get_srcSystem() == system,
         3.0,
+        diagnostics,
     )
     if heartbeat.base_mode & mavlink.MAV_MODE_FLAG_SAFETY_ARMED:
         raise CheckError("target advertised armed state after ARM rejection")
     return int(acknowledgement.result)
 
 
-def request_message(link, mavlink, system, component, message_id):
+def request_message(
+    link, mavlink, system, component, message_id, diagnostics
+):
     link.mav.command_long_send(
         system,
         component,
@@ -180,6 +198,7 @@ def request_message(link, mavlink, system, component, message_id):
             value.command == mavlink.MAV_CMD_SET_MESSAGE_INTERVAL
         ),
         5.0,
+        diagnostics,
     )
     if acknowledgement.result != mavlink.MAV_RESULT_ACCEPTED:
         raise CheckError(
@@ -188,13 +207,16 @@ def request_message(link, mavlink, system, component, message_id):
         )
 
 
-def verify_sensor_messages(link, mavlink, system, component):
+def verify_sensor_messages(
+    link, mavlink, system, component, diagnostics
+):
     request_message(
         link,
         mavlink,
         system,
         component,
         mavlink.MAVLINK_MSG_ID_GPS_RAW_INT,
+        diagnostics,
     )
     gps = wait_message(
         link,
@@ -204,6 +226,7 @@ def verify_sensor_messages(link, mavlink, system, component):
             value.fix_type >= mavlink.GPS_FIX_TYPE_NO_FIX
         ),
         30.0,
+        diagnostics,
     )
 
     request_message(
@@ -212,12 +235,14 @@ def verify_sensor_messages(link, mavlink, system, component):
         system,
         component,
         mavlink.MAVLINK_MSG_ID_RAW_IMU,
+        diagnostics,
     )
     first = wait_message(
         link,
         "RAW_IMU",
         lambda value: value.get_srcSystem() == system,
         10.0,
+        diagnostics,
     )
     second = wait_message(
         link,
@@ -227,6 +252,7 @@ def verify_sensor_messages(link, mavlink, system, component):
             value.time_usec > first.time_usec
         ),
         10.0,
+        diagnostics,
     )
     first_axes = (
         first.xacc, first.yacc, first.zacc,
@@ -263,6 +289,7 @@ def main() -> int:
     root = Path(__file__).resolve().parents[2]
     sys.path.insert(0, str(root / "modules/mavlink"))
     link = None
+    diagnostics = bytearray()
     try:
         from pymavlink import mavutil
 
@@ -285,7 +312,7 @@ def main() -> int:
         )
         tolerate_transient_zero_reads(link)
         heartbeat = wait_copter_startup(
-            link, mavutil.mavlink, args.startup_timeout
+            link, mavutil.mavlink, args.startup_timeout, diagnostics
         )
         if heartbeat.type != mavutil.mavlink.MAV_TYPE_QUADROTOR:
             raise CheckError(f"unexpected vehicle type: {heartbeat.type}")
@@ -306,12 +333,15 @@ def main() -> int:
             mavutil.mavlink,
             target_system,
             target_component,
+            diagnostics,
         )
         normal_result = request_arm(
-            link, mavutil.mavlink, target_system, target_component, 0
+            link, mavutil.mavlink, target_system, target_component, 0,
+            diagnostics,
         )
         forced_result = request_arm(
-            link, mavutil.mavlink, target_system, target_component, 2989
+            link, mavutil.mavlink, target_system, target_component, 2989,
+            diagnostics,
         )
 
         evidence = {
@@ -361,6 +391,9 @@ def main() -> int:
                 encoding="utf-8",
             )
     except (CheckError, ImportError, OSError, UnicodeError) as error:
+        if diagnostics:
+            decoded = diagnostics.decode("latin1", errors="replace")
+            print(f"spresense_m1_copter_diagnostics={decoded!r}", file=sys.stderr)
         print(f"spresense_m1_copter_serial=FAIL reason={error}", file=sys.stderr)
         return 1
     finally:

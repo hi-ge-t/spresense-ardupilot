@@ -154,6 +154,7 @@ bool Spresense::convert_imu_sample(const ImuRawSample &raw,
 #include <sched.h>
 #include <signal.h>
 #include <stdint.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
@@ -171,6 +172,11 @@ Spresense::GnssSample gnss_latest_sample {};
 struct cxd56_gnss_positiondata2_s gnss_position {};
 uint32_t gnss_sample_sequence;
 uint32_t gnss_consumed_sequence;
+bool gnss_timeout_reported;
+bool gnss_notification_reported;
+bool gnss_sample_reported;
+bool gnss_attach_reported;
+bool gnss_consumed_reported;
 constexpr uint8_t GNSS_INIT_IDLE = 0U;
 constexpr uint8_t GNSS_INIT_STARTING = 1U;
 constexpr uint8_t GNSS_INIT_READY = 2U;
@@ -260,13 +266,19 @@ void close_device(int &fd)
     }
 }
 
-void gnss_init_fail(int &fd)
+void gnss_marker(const char *marker)
+{
+    (void)write(STDOUT_FILENO, marker, strlen(marker));
+}
+
+void gnss_init_fail(int &fd, const char *marker)
 {
     if (fd >= 0 && gnss_signal_configured) {
         (void)configure_gnss_notification(fd, false);
         gnss_signal_configured = false;
     }
     close_device(fd);
+    gnss_marker(marker);
     __atomic_store_n(&gnss_init_state, GNSS_INIT_FAILED, __ATOMIC_RELEASE);
 }
 
@@ -334,11 +346,19 @@ void run_gnss_reader()
     for (;;) {
         const GnssWaitStatus wait_status = wait_gnss_notification();
         if (wait_status == GnssWaitStatus::TIMEOUT) {
+            if (!gnss_timeout_reported) {
+                gnss_timeout_reported = true;
+                gnss_marker("SPRESENSE_M1_GNSS=WAIT_TIMEOUT\n");
+            }
             continue;
         }
         if (wait_status != GnssWaitStatus::NOTIFIED) {
-            gnss_init_fail(gnss_fd);
+            gnss_init_fail(gnss_fd, "SPRESENSE_M1_GNSS=WAIT_FAIL\n");
             return;
+        }
+        if (!gnss_notification_reported) {
+            gnss_notification_reported = true;
+            gnss_marker("SPRESENSE_M1_GNSS=NOTIFIED\n");
         }
 
         gnss_position = {};
@@ -348,47 +368,59 @@ void run_gnss_reader()
         } while (length < 0 && errno == EINTR);
         if (length != static_cast<ssize_t>(sizeof(gnss_position)) ||
             !publish_gnss_sample(gnss_position)) {
-            gnss_init_fail(gnss_fd);
+            gnss_init_fail(gnss_fd, "SPRESENSE_M1_GNSS=STREAM_FAIL\n");
             return;
+        }
+        if (!gnss_sample_reported) {
+            gnss_sample_reported = true;
+            gnss_marker("SPRESENSE_M1_GNSS=SAMPLE\n");
         }
     }
 }
 
 void *gnss_init_thread(void *)
 {
+    gnss_marker("SPRESENSE_M1_GNSS=THREAD\n");
     int fd = open(CONFIG_SPRESENSE_M1_COPTER_GNSS_DEVICE,
                   O_RDONLY);
     if (fd < 0) {
-        gnss_init_fail(fd);
+        gnss_init_fail(fd, "SPRESENSE_M1_GNSS=OPEN_FAIL\n");
         return nullptr;
     }
+    gnss_marker("SPRESENSE_M1_GNSS=OPEN\n");
 
     char version[CXD56_GNSS_VERSION_MAXLEN] {};
     if (checked_ioctl(fd, CXD56_GNSS_IOCTL_WAKEUP, 0U) != 0) {
-        gnss_init_fail(fd);
+        gnss_init_fail(fd, "SPRESENSE_M1_GNSS=WAKE_FAIL\n");
         return nullptr;
     }
+    gnss_marker("SPRESENSE_M1_GNSS=WAKE\n");
     if (checked_ioctl(fd, CXD56_GNSS_IOCTL_GET_VERSION,
                       reinterpret_cast<unsigned long>(version)) != 0 ||
         version[0] == '\0') {
-        gnss_init_fail(fd);
+        gnss_init_fail(fd, "SPRESENSE_M1_GNSS=VERSION_FAIL\n");
         return nullptr;
     }
+    gnss_marker("SPRESENSE_M1_GNSS=VERSION\n");
+    gnss_marker("SPRESENSE_M1_GNSS=SIGNAL_BEGIN\n");
     if (!block_gnss_notification() ||
         !configure_gnss_notification(fd, true)) {
-        gnss_init_fail(fd);
+        gnss_init_fail(fd, "SPRESENSE_M1_GNSS=SIGNAL_FAIL\n");
         return nullptr;
     }
     gnss_signal_configured = true;
+    gnss_marker("SPRESENSE_M1_GNSS=SIGNAL_CONFIGURED\n");
     if (checked_ioctl(fd, CXD56_GNSS_IOCTL_START,
                       CXD56_GNSS_STMOD_HOT) != 0) {
-        gnss_init_fail(fd);
+        gnss_init_fail(fd, "SPRESENSE_M1_GNSS=START_FAIL\n");
         return nullptr;
     }
+    gnss_marker("SPRESENSE_M1_GNSS=START\n");
 
     gnss_fd = fd;
     gnss_have_timestamp = false;
     __atomic_store_n(&gnss_init_state, GNSS_INIT_READY, __ATOMIC_RELEASE);
+    gnss_marker("SPRESENSE_M1_GNSS=READY\n");
     run_gnss_reader();
     return nullptr;
 }
@@ -436,6 +468,10 @@ bool Spresense::gnss_start()
     const uint8_t state = __atomic_load_n(
         &gnss_init_state, __ATOMIC_ACQUIRE);
     if (state == GNSS_INIT_READY) {
+        if (!gnss_attach_reported) {
+            gnss_attach_reported = true;
+            gnss_marker("SPRESENSE_M1_GNSS=ATTACH\n");
+        }
         return gnss_fd >= 0;
     }
     if (state == GNSS_INIT_STARTING || state == GNSS_INIT_FAILED) {
@@ -449,6 +485,7 @@ bool Spresense::gnss_start()
         return expected == GNSS_INIT_READY && gnss_fd >= 0;
     }
     if (!start_gnss_init_thread()) {
+        gnss_marker("SPRESENSE_M1_GNSS=THREAD_FAIL\n");
         __atomic_store_n(
             &gnss_init_state, GNSS_INIT_FAILED, __ATOMIC_RELEASE);
         return false;
@@ -478,6 +515,10 @@ Spresense::SensorReadStatus Spresense::gnss_read(GnssSample &sample)
     gnss_consumed_sequence = gnss_sample_sequence;
     if (pthread_mutex_unlock(&gnss_sample_mutex) != 0) {
         return SensorReadStatus::ERROR;
+    }
+    if (!gnss_consumed_reported) {
+        gnss_consumed_reported = true;
+        gnss_marker("SPRESENSE_M1_GNSS=CONSUMED\n");
     }
     return SensorReadStatus::SAMPLE;
 }
