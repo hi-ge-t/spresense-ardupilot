@@ -165,6 +165,17 @@ def main() -> int:
     sensor_bridge = (hal_root / "SensorBridge.cpp").read_text(
         encoding="utf-8"
     )
+    storage = (hal_root / "Storage.cpp").read_text(encoding="utf-8")
+    require_tokens(
+        failures,
+        "storage",
+        storage,
+        (
+            "mkdir(STORAGE_DIRECTORY, 0777)",
+            "errno != EEXIST",
+            "_storage.init(_path, STORAGE_SIZE)",
+        ),
+    )
     require_tokens(
         failures,
         "sensor-bridge",
@@ -276,6 +287,11 @@ def main() -> int:
             "+SENSORS_CXD5602PWBIMU=y",
             "+CXD56_GNSS_RAM=y",
             "+CXD56_GNSS_HEAP=y",
+            "+FS_AUTOMOUNTER=y",
+            "+CXD56_SDCARD_AUTOMOUNT=y",
+            '+CXD56_SDCARD_AUTOMOUNT_FSTYPE="vfat"',
+            '+CXD56_SDCARD_AUTOMOUNT_BLKDEV="/dev/mmcsd0"',
+            '+CXD56_SDCARD_AUTOMOUNT_MOUNTPOINT="/mnt/sd0"',
             '+INIT_ENTRYPOINT="arducopter_spresense_main"',
             "-CXD56_GNSS=y",
             "-CXD56_EMMC=y",

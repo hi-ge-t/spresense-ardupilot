@@ -1,6 +1,8 @@
 #include "Storage.h"
 
+#include <errno.h>
 #include <string.h>
+#include <sys/stat.h>
 
 Spresense::Storage::Storage(const char *path) :
     _path(path),
@@ -10,6 +12,11 @@ Spresense::Storage::Storage(const char *path) :
 
 void Spresense::Storage::init()
 {
+    if (strcmp(_path, STORAGE_PATH) == 0 &&
+        mkdir(STORAGE_DIRECTORY, 0777) != 0 && errno != EEXIST) {
+        _healthy = false;
+        return;
+    }
     _healthy = _storage.init(_path, STORAGE_SIZE);
 }
 

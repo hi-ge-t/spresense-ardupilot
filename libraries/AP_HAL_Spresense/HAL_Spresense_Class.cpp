@@ -94,6 +94,9 @@ void Spresense::HAL_Spresense::run(
         AP_HAL::panic("Spresense scheduler startup failed");
     }
     storage->init();
+    if (!storage->healthy()) {
+        AP_HAL::panic("Spresense microSD storage unavailable");
+    }
     gpio->init();
     rcin->init();
     rcout->init();
