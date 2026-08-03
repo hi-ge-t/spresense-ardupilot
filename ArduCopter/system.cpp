@@ -591,10 +591,13 @@ void Copter::allocate_motors(void)
     spresense_init_marker("SPRESENSE_M1_MOTORS=LOITER_CONVERT_AFTER\n");
 
 #if MODE_CIRCLE_ENABLED
+    spresense_init_marker("SPRESENSE_M1_MOTORS=CIRCLE_CONVERT_BEFORE\n");
     circle_nav->convert_parameters();
+    spresense_init_marker("SPRESENSE_M1_MOTORS=CIRCLE_CONVERT_AFTER\n");
 #endif
 
     // param count could have changed
+    spresense_init_marker("SPRESENSE_M1_MOTORS=INVALIDATE_BEFORE\n");
     AP_Param::invalidate_count();
     spresense_init_marker("SPRESENSE_M1_MOTORS=DONE\n");
 }
