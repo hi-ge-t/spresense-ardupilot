@@ -326,8 +326,12 @@ void AP_Vehicle::setup()
 
     // validate the static parameter table, then load persistent
     // values from storage:
+    hal.console->printf("SPRESENSE_M1_SETUP=PARAMS_BEFORE\n");
+    hal.console->flush();
     AP_Param::check_var_info();
     load_parameters();
+    hal.console->printf("SPRESENSE_M1_SETUP=PARAMS_AFTER\n");
+    hal.console->flush();
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS
     if (AP_BoardConfig::get_sdcard_slowdown() != 0) {
@@ -344,6 +348,8 @@ void AP_Vehicle::setup()
     uint32_t log_bit;
     get_scheduler_tasks(tasks, task_count, log_bit);
     AP::scheduler().init(tasks, task_count, log_bit);
+    hal.console->printf("SPRESENSE_M1_SETUP=SCHEDULER_AFTER\n");
+    hal.console->flush();
 
     // time per loop - this gets updated in the main loop() based on
     // actual loop rate
@@ -361,6 +367,8 @@ void AP_Vehicle::setup()
     // the GCS singleton first as it sets the global mavlink system ID
     // which may get used very early on.
     gcs().init();
+    hal.console->printf("SPRESENSE_M1_SETUP=GCS_AFTER\n");
+    hal.console->flush();
 #endif
 
 #if AP_SERIALMANAGER_ENABLED
@@ -371,6 +379,8 @@ void AP_Vehicle::setup()
 #endif
     // initialise serial ports
     serial_manager.init();
+    hal.console->printf("SPRESENSE_M1_SETUP=SERIAL_AFTER\n");
+    hal.console->flush();
 #endif
 #if HAL_GCS_ENABLED
     gcs().setup_console();
@@ -409,6 +419,8 @@ void AP_Vehicle::setup()
 #endif
 
     BoardConfig.init();
+    hal.console->printf("SPRESENSE_M1_SETUP=BOARD_AFTER\n");
+    hal.console->flush();
 
 #if HAL_CANMANAGER_ENABLED
     can_mgr.init();
@@ -429,7 +441,11 @@ void AP_Vehicle::setup()
 #endif
 
     // init_ardupilot is where the vehicle does most of its initialisation.
+    hal.console->printf("SPRESENSE_M1_SETUP=ARDUPILOT_BEFORE\n");
+    hal.console->flush();
     init_ardupilot();
+    hal.console->printf("SPRESENSE_M1_SETUP=ARDUPILOT_AFTER\n");
+    hal.console->flush();
 
 #if AP_SCRIPTING_ENABLED
     scripting.init();
