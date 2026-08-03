@@ -19,7 +19,9 @@ public:
     bool get_output_banner(char *banner, uint8_t banner_len) override;
 
 private:
-    static constexpr uint16_t SAMPLE_RATE_HZ = 240U;
+    // Match the already hardware-verified bounded Sony probe for M1.  A
+    // flight-rate qualification is a later hardware gate.
+    static constexpr uint16_t SAMPLE_RATE_HZ = 60U;
     static constexpr uint8_t MAX_DRAIN_SAMPLES = 8U;
 
     bool _started = false;

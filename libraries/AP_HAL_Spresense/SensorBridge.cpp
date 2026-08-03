@@ -14,7 +14,7 @@ constexpr uint16_t UNKNOWN_DOP = UINT16_MAX;
 constexpr int GNSS_NOTIFICATION_SIGNAL = 18;
 constexpr uint32_t GNSS_NOTIFICATION_WAIT_MS = 1250U;
 constexpr uint32_t GNSS_READER_YIELD_US = 1000U;
-constexpr int PWBIMU_STARTUP_POLL_TIMEOUT_MS = 1;
+constexpr int PWBIMU_STARTUP_POLL_TIMEOUT_MS = 1000;
 #endif
 
 bool finite_position(const Spresense::GnssRawSample &raw)

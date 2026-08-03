@@ -24,7 +24,8 @@ M1 now contains three separate software slices:
 The third slice now also contains dedicated, board-local sensor integration.
 `AP_GPS_Spresense` reads CXD5610 samples through `/dev/gps2`, while
 `AP_InertialSensor_Spresense` reads the CXD5602PWBIMU through `/dev/imu0` at a
-configured 240 Hz. `SensorBridge` keeps Sony/NuttX types out of the Waf vehicle
+bring-up-only 60 Hz. This matches the hardware-verified bounded Sony probe;
+flight-rate timing remains HOLD. `SensorBridge` keeps Sony/NuttX types out of the Waf vehicle
 archive ABI and converts GNSS position/velocity/DOP and IMU gyro/acceleration
 into ArduPilot frontend units. Its host side is a fail-closed stub; the Sony
 application must provide the real bridge at final link. The general I2C and

@@ -404,6 +404,8 @@ def main() -> int:
             "m1.pwbimu.bus": "SPI5",
             "m1.pwbimu.pinshare": "eMMC",
             "m1.pwbimu.hal_integration": "AP_InertialSensor_Spresense",
+            "m1.pwbimu.sample_rate_hz": "60",
+            "m1.pwbimu.sample_rate_status": "bringup-only-hardware-HOLD",
             "m1.pwbimu.orientation": "ROTATION_NONE-hardware-HOLD",
             "m1.sensor.hal_integration": "GNSS+INS",
             "m1.sensor.runtime": "hardware-HOLD",

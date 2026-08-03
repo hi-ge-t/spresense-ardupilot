@@ -38,6 +38,8 @@
     "bus": "SPI5",
     "pinshare": "eMMC",
     "hal_integration": "AP_InertialSensor_Spresense",
+    "sample_rate_hz": 60,
+    "sample_rate_status": "bringup-only-hardware-HOLD",
     "orientation": "ROTATION_NONE-hardware-HOLD",
     "runtime_fallback": "disabled"
   },

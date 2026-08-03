@@ -34,6 +34,8 @@ EXPECTED = {
     "pwbimu.bus": "SPI5",
     "pwbimu.pinshare": "eMMC",
     "pwbimu.hal_integration": "AP_InertialSensor_Spresense",
+    "pwbimu.sample_rate_hz": 60,
+    "pwbimu.sample_rate_status": "bringup-only-hardware-HOLD",
     "pwbimu.orientation": "ROTATION_NONE-hardware-HOLD",
     "pwbimu.runtime_fallback": "disabled",
     "safety.arming": "copter-path-always-reject",
@@ -166,6 +168,15 @@ def main() -> int:
     sensor_bridge = (hal_root / "SensorBridge.cpp").read_text(
         encoding="utf-8"
     )
+    inertial_sensor = (
+        root / "libraries/AP_InertialSensor/AP_InertialSensor_Spresense.h"
+    ).read_text(encoding="utf-8")
+    require_tokens(
+        failures,
+        "inertial-sensor",
+        inertial_sensor,
+        ("SAMPLE_RATE_HZ = 60U",),
+    )
     storage = (hal_root / "Storage.cpp").read_text(encoding="utf-8")
     require_tokens(
         failures,
@@ -196,6 +207,7 @@ def main() -> int:
             "gnss_init_thread",
             "start_gnss_init_thread",
             "run_gnss_reader()",
+            "PWBIMU_STARTUP_POLL_TIMEOUT_MS = 1000",
             "gnss_position",
             "PTHREAD_EXPLICIT_SCHED",
             "SNIOC_SSAMPRATE",
