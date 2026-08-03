@@ -11,7 +11,8 @@ namespace {
 constexpr float GRAVITY_M_S2 = 9.80665f;
 constexpr uint16_t UNKNOWN_DOP = UINT16_MAX;
 #if defined(__NuttX__)
-constexpr int GNSS_READER_POLL_TIMEOUT_MS = 15000;
+constexpr int GNSS_NOTIFICATION_SIGNAL = 18;
+constexpr uint32_t GNSS_NOTIFICATION_WAIT_MS = 1250U;
 constexpr int PWBIMU_POLL_TIMEOUT_MS = 1;
 #endif
 
@@ -151,8 +152,10 @@ bool Spresense::convert_imu_sample(const ImuRawSample &raw,
 #include <poll.h>
 #include <pthread.h>
 #include <sched.h>
+#include <signal.h>
 #include <stdint.h>
 #include <sys/ioctl.h>
+#include <time.h>
 #include <unistd.h>
 
 namespace {
@@ -162,6 +165,7 @@ int pwbimu_fd = -1;
 bool gnss_have_timestamp;
 uint64_t gnss_last_timestamp;
 uint8_t gnss_init_state;
+bool gnss_signal_configured;
 pthread_mutex_t gnss_sample_mutex = PTHREAD_MUTEX_INITIALIZER;
 Spresense::GnssSample gnss_latest_sample {};
 struct cxd56_gnss_positiondata2_s gnss_position {};
@@ -176,12 +180,66 @@ constexpr int GNSS_INIT_PRIORITY = 110;
 // static, as in the hardware-verified bounded GCS probe, rather than local.
 constexpr size_t GNSS_INIT_STACK_BYTES = 8192U;
 
+enum class GnssWaitStatus : uint8_t {
+    NOTIFIED,
+    TIMEOUT,
+    ERROR,
+};
+
 int checked_ioctl(int fd, int request, unsigned long argument)
 {
     if (ioctl(fd, request, argument) < 0) {
         return errno == 0 ? -EIO : -errno;
     }
     return 0;
+}
+
+bool gnss_notification_mask(sigset_t &mask)
+{
+    return sigemptyset(&mask) == 0 &&
+           sigaddset(&mask, GNSS_NOTIFICATION_SIGNAL) == 0;
+}
+
+bool block_gnss_notification()
+{
+    sigset_t mask {};
+    return gnss_notification_mask(mask) &&
+           sigprocmask(SIG_BLOCK, &mask, nullptr) == 0;
+}
+
+bool configure_gnss_notification(int fd, bool enable)
+{
+    struct cxd56_gnss_signal_setting_s setting {};
+    setting.fd = fd;
+    setting.enable = enable;
+    setting.gnsssig = CXD56_GNSS_SIG_GNSS;
+    setting.signo = GNSS_NOTIFICATION_SIGNAL;
+    return checked_ioctl(
+        fd, CXD56_GNSS_IOCTL_SIGNAL_SET,
+        reinterpret_cast<unsigned long>(&setting)) == 0;
+}
+
+GnssWaitStatus wait_gnss_notification()
+{
+    sigset_t mask {};
+    if (!gnss_notification_mask(mask)) {
+        return GnssWaitStatus::ERROR;
+    }
+    const struct timespec timeout {
+        static_cast<time_t>(GNSS_NOTIFICATION_WAIT_MS / 1000U),
+        static_cast<long>(GNSS_NOTIFICATION_WAIT_MS % 1000U) * 1000000L,
+    };
+    int result;
+    do {
+        result = sigtimedwait(&mask, nullptr, &timeout);
+    } while (result < 0 && errno == EINTR);
+    if (result == GNSS_NOTIFICATION_SIGNAL) {
+        return GnssWaitStatus::NOTIFIED;
+    }
+    if (result < 0 && errno == EAGAIN) {
+        return GnssWaitStatus::TIMEOUT;
+    }
+    return GnssWaitStatus::ERROR;
 }
 
 bool ready_to_read(int fd, int timeout_ms)
@@ -204,6 +262,10 @@ void close_device(int &fd)
 
 void gnss_init_fail(int &fd)
 {
+    if (fd >= 0 && gnss_signal_configured) {
+        (void)configure_gnss_notification(fd, false);
+        gnss_signal_configured = false;
+    }
     close_device(fd);
     __atomic_store_n(&gnss_init_state, GNSS_INIT_FAILED, __ATOMIC_RELEASE);
 }
@@ -270,8 +332,13 @@ bool publish_gnss_sample(const struct cxd56_gnss_positiondata2_s &position)
 void run_gnss_reader()
 {
     for (;;) {
-        if (!ready_to_read(gnss_fd, GNSS_READER_POLL_TIMEOUT_MS)) {
+        const GnssWaitStatus wait_status = wait_gnss_notification();
+        if (wait_status == GnssWaitStatus::TIMEOUT) {
             continue;
+        }
+        if (wait_status != GnssWaitStatus::NOTIFIED) {
+            gnss_init_fail(gnss_fd);
+            return;
         }
 
         gnss_position = {};
@@ -307,6 +374,12 @@ void *gnss_init_thread(void *)
         gnss_init_fail(fd);
         return nullptr;
     }
+    if (!block_gnss_notification() ||
+        !configure_gnss_notification(fd, true)) {
+        gnss_init_fail(fd);
+        return nullptr;
+    }
+    gnss_signal_configured = true;
     if (checked_ioctl(fd, CXD56_GNSS_IOCTL_START,
                       CXD56_GNSS_STMOD_HOT) != 0) {
         gnss_init_fail(fd);
