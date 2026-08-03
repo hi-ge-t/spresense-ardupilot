@@ -182,7 +182,10 @@ bool pwbimu_read_after_gnss_reported;
 bool pwbimu_return_after_gnss_reported;
 bool pwbimu_sample_after_gnss_reported;
 bool pwbimu_eagain_after_gnss_reported;
+bool pwbimu_first_empty_after_gnss_reported;
+bool pwbimu_empty_count_after_gnss_reported;
 uint32_t pwbimu_eagain_after_gnss_count;
+uint32_t pwbimu_empty_after_gnss_count;
 constexpr uint8_t GNSS_INIT_IDLE = 0U;
 constexpr uint8_t GNSS_INIT_STARTING = 1U;
 constexpr uint8_t GNSS_INIT_READY = 2U;
@@ -603,6 +606,23 @@ Spresense::SensorReadStatus Spresense::pwbimu_read(ImuSample &sample)
     if (gnss_started && !pwbimu_return_after_gnss_reported) {
         pwbimu_return_after_gnss_reported = true;
         gnss_marker("SPRESENSE_M1_PWBIMU=READ_RETURNED\n");
+    }
+    if (gnss_started && length != static_cast<ssize_t>(sizeof(data))) {
+        if (!pwbimu_first_empty_after_gnss_reported) {
+            pwbimu_first_empty_after_gnss_reported = true;
+            if (length < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+                gnss_marker("SPRESENSE_M1_PWBIMU=FIRST_EAGAIN\n");
+            } else if (length == 0) {
+                gnss_marker("SPRESENSE_M1_PWBIMU=FIRST_ZERO\n");
+            } else {
+                gnss_marker("SPRESENSE_M1_PWBIMU=FIRST_SHORT_OR_ERROR\n");
+            }
+        }
+        if (++pwbimu_empty_after_gnss_count >= 100U &&
+            !pwbimu_empty_count_after_gnss_reported) {
+            pwbimu_empty_count_after_gnss_reported = true;
+            gnss_marker("SPRESENSE_M1_PWBIMU=EMPTY_100\n");
+        }
     }
     if (length < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
         if (gnss_started && ++pwbimu_eagain_after_gnss_count >= 1000U &&
