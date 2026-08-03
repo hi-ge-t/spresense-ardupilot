@@ -1561,26 +1561,20 @@ bool AP_Param::load_all()
     uint16_t ofs = sizeof(AP_Param::EEPROM_header);
 
     hal.console->printf("SPRESENSE_M1_LOAD_ALL=DEFAULTS_BEFORE\n");
-    hal.console->flush();
     reload_defaults_file(false);
     hal.console->printf("SPRESENSE_M1_LOAD_ALL=DEFAULTS_AFTER\n");
-    hal.console->flush();
 
     if (!registered_save_handler) {
         hal.console->printf("SPRESENSE_M1_LOAD_ALL=REGISTER_BEFORE\n");
-        hal.console->flush();
         registered_save_handler = true;
         hal.scheduler->register_io_process(FUNCTOR_BIND((&save_dummy), &AP_Param::save_io_handler, void));
         hal.console->printf("SPRESENSE_M1_LOAD_ALL=REGISTER_AFTER\n");
-        hal.console->flush();
     }
     
     while (ofs < _storage.size()) {
         hal.console->printf("SPRESENSE_M1_LOAD_ALL=READ_BEFORE\n");
-        hal.console->flush();
         _storage.read_block(&phdr, ofs, sizeof(phdr));
         hal.console->printf("SPRESENSE_M1_LOAD_ALL=READ_AFTER\n");
-        hal.console->flush();
         if (is_sentinel(phdr)) {
             // we've reached the sentinel
             sentinel_offset = ofs;
