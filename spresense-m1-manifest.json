@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "upstream": {
+    "vehicle": "Copter",
+    "tag": "Copter-4.7.0",
+    "commit": "1511f27194f1dcc3728270883047bdf022b3fd53"
+  },
+  "sdk": {
+    "remote": "https://github.com/sonydevworld/spresense.git",
+    "commit": "7fd61b2c03f06a4ff0302b84c755e58c338788b2"
+  },
+  "target": {
+    "board": "Sony Spresense CXD5602",
+    "os": "Sony Spresense SDK NuttX",
+    "profile": "spresense-m1-pwbimu-gnss-gcs",
+    "legacy_profile": "spresense-m1-gcs"
+  },
+  "gnss": {
+    "builtin": "disabled",
+    "addon": "required",
+    "device": "/dev/gps2",
+    "ram": "required",
+    "startup_probe": "one-bounded-sample",
+    "runtime_fallback": "disabled"
+  },
+  "pwbimu": {
+    "addon": "required",
+    "device": "/dev/imu0",
+    "startup_probe": "one-bounded-sample",
+    "bus": "SPI5",
+    "pinshare": "eMMC",
+    "link_guard": "required",
+    "runtime_fallback": "disabled"
+  },
+  "safety": {
+    "arming": "guard-always-reject",
+    "actuator_driver": "absent",
+    "outputs": "disabled",
+    "physical_write_expected": 0
+  },
+  "gcs": {
+    "transport": "/dev/ttyS0",
+    "baud": 115200,
+    "mavlink": "ArduPilot pinned ardupilotmega v2",
+    "heartbeat": "MAV_AUTOPILOT_ARDUPILOTMEGA",
+    "parameter_surface": "read-only-diagnostic",
+    "arm_command": "always-denied",
+    "full_copter": false
+  },
+  "storage": {
+    "development": "microSD",
+    "development_path": "/mnt/sd0/APM/ardupilot.stg",
+    "final_candidate": "eMMC",
+    "automatic_fallback": "disabled",
+    "pwbimu_emmc_coexistence": "hardware-design-HOLD"
+  },
+  "distribution": {
+    "license": "GPL-3.0-or-later",
+    "binary": "disabled",
+    "source_remote": "https://github.com/hi-ge-t/spresense-ardupilot"
+  },
+  "evidence": {
+    "host_contract": "required",
+    "sony_object_compile": "required",
+    "sony_gcs_firmware_link": "required",
+    "linker_map_guard": "required",
+    "sony_copter_link": "HOLD",
+    "copter_arming_path": "HOLD",
+    "spresense_gcs_runtime": "confirmed-single-bench-run-2026-08-01",
+    "qgroundcontrol_runtime": "confirmed-single-bench-run-2026-08-01",
+    "spresense_boot": "confirmed-single-bench-run-2026-08-01",
+    "runtime_record": "docs/evidence/SPRESENSE_M1_GCS_20260801.md",
+    "pwbimu_runtime": "confirmed-single-bench-run-2026-08-03",
+    "gnss_runtime": "confirmed-bounded-sample-single-bench-run-2026-08-03",
+    "combined_addon_runtime": "confirmed-single-boot-2026-08-03",
+    "gnss_fix": "HOLD",
+    "combined_runtime_record": "docs/evidence/SPRESENSE_M1_COMBINED_RUNTIME_20260803.md",
+    "flight": "out-of-scope"
+  }
+}

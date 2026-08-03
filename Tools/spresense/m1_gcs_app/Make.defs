@@ -1,0 +1,3 @@
+ifneq ($(CONFIG_SPRESENSE_M1_GCS),)
+CONFIGURED_APPS += m1_gcs_app
+endif

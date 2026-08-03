@@ -1,0 +1,62 @@
+config SPRESENSE_M1_GCS
+	tristate "Spresense M1 output-disabled MAVLink GCS bring-up"
+	default n
+	depends on CXD56_GNSS_RAM && CXD56_GNSS_HEAP
+	depends on CXD56_GNSS_ADDON && SENSORS_CXD5610_GNSS
+	depends on !CXD56_GNSS
+	---help---
+		Build the dedicated main-USB MAVLink diagnostic used to prove
+		bidirectional GCS transport before Copter is linked. This target has
+		no actuator backend and rejects every arming request.
+
+if SPRESENSE_M1_GCS
+
+config SPRESENSE_M1_GCS_PROGNAME
+	string "Program name"
+	default "spresense_m1_gcs"
+
+config SPRESENSE_M1_GCS_PRIORITY
+	int "Runtime task priority"
+	default 100
+
+config SPRESENSE_M1_GCS_STACKSIZE
+	int "Runtime task stack size"
+	default 8192
+
+config SPRESENSE_M1_GCS_DEVICE
+	string "Dedicated MAVLink serial device"
+	default "/dev/ttyS0"
+
+config SPRESENSE_M1_GCS_BAUD
+	int "MAVLink baud rate"
+	default 115200
+
+config SPRESENSE_M1_GNSS_RUNTIME_REQUIRED
+	bool "Require CXD5610 GNSS Add-on diagnostic probe"
+	default n
+	depends on CXD56_GNSS_ADDON && SENSORS_CXD5610_GNSS
+	---help---
+		Require the Sony GNSS Add-on at /dev/gps2. The M1 diagnostic
+		performs one bounded positioning-notification sample during startup.
+		A sample does not imply a position fix, accuracy or timing proof.
+
+config SPRESENSE_M1_GNSS_DEVICE
+	string "CXD5610 GNSS Add-on device"
+	default "/dev/gps2"
+	depends on SPRESENSE_M1_GNSS_RUNTIME_REQUIRED
+
+config SPRESENSE_M1_PWBIMU_REQUIRED
+	bool "Require CXD5602PWBIMU diagnostic probe"
+	default n
+	depends on SENSORS_CXD5602PWBIMU
+	---help---
+		Require the Sony Multi-IMU Add-on at /dev/imu0. The M1 diagnostic
+		performs one bounded sensor sample probe during startup and keeps
+		arming and every physical output disabled regardless of the result.
+
+config SPRESENSE_M1_PWBIMU_DEVICE
+	string "CXD5602PWBIMU device"
+	default "/dev/imu0"
+	depends on SPRESENSE_M1_PWBIMU_REQUIRED
+
+endif
