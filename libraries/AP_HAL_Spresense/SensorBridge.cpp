@@ -11,8 +11,7 @@ namespace {
 constexpr float GRAVITY_M_S2 = 9.80665f;
 constexpr uint16_t UNKNOWN_DOP = UINT16_MAX;
 #if defined(__NuttX__)
-constexpr int GNSS_READER_POLL_TIMEOUT_MS = 1000;
-constexpr uint32_t GNSS_READER_YIELD_US = 1000U;
+constexpr int GNSS_READER_POLL_TIMEOUT_MS = 15000;
 constexpr int PWBIMU_POLL_TIMEOUT_MS = 1;
 #endif
 
@@ -149,13 +148,11 @@ bool Spresense::convert_imu_sample(const ImuRawSample &raw,
 
 #include <errno.h>
 #include <fcntl.h>
-#include <new>
 #include <poll.h>
 #include <pthread.h>
 #include <sched.h>
 #include <stdint.h>
 #include <sys/ioctl.h>
-#include <time.h>
 #include <unistd.h>
 
 namespace {
@@ -167,6 +164,7 @@ uint64_t gnss_last_timestamp;
 uint8_t gnss_init_state;
 pthread_mutex_t gnss_sample_mutex = PTHREAD_MUTEX_INITIALIZER;
 Spresense::GnssSample gnss_latest_sample {};
+struct cxd56_gnss_positiondata2_s gnss_position {};
 uint32_t gnss_sample_sequence;
 uint32_t gnss_consumed_sequence;
 constexpr uint8_t GNSS_INIT_IDLE = 0U;
@@ -174,10 +172,9 @@ constexpr uint8_t GNSS_INIT_STARTING = 1U;
 constexpr uint8_t GNSS_INIT_READY = 2U;
 constexpr uint8_t GNSS_INIT_FAILED = 3U;
 constexpr int GNSS_INIT_PRIORITY = 110;
-// The handshake and PVT conversion enter several Sony driver/libc layers.
-// Keep a conservative margin; the 1328-byte PVT buffer itself is allocated
-// from the complete GNSS-RAM heap below rather than consuming this stack.
-constexpr size_t GNSS_INIT_STACK_BYTES = 16384U;
+// Match the other Spresense worker stacks.  Sony's 1328-byte PVT snapshot is
+// static, as in the hardware-verified bounded GCS probe, rather than local.
+constexpr size_t GNSS_INIT_STACK_BYTES = 8192U;
 
 int checked_ioctl(int fd, int request, unsigned long argument)
 {
@@ -270,29 +267,22 @@ bool publish_gnss_sample(const struct cxd56_gnss_positiondata2_s &position)
     return true;
 }
 
-void run_gnss_reader(struct cxd56_gnss_positiondata2_s &position)
+void run_gnss_reader()
 {
     for (;;) {
         if (!ready_to_read(gnss_fd, GNSS_READER_POLL_TIMEOUT_MS)) {
             continue;
         }
 
-        position = {};
+        gnss_position = {};
         ssize_t length;
         do {
-            length = read(gnss_fd, &position, sizeof(position));
+            length = read(gnss_fd, &gnss_position, sizeof(gnss_position));
         } while (length < 0 && errno == EINTR);
-        if (length != static_cast<ssize_t>(sizeof(position)) ||
-            !publish_gnss_sample(position)) {
+        if (length != static_cast<ssize_t>(sizeof(gnss_position)) ||
+            !publish_gnss_sample(gnss_position)) {
             gnss_init_fail(gnss_fd);
             return;
-        }
-
-        // The CXD5610 poll notification is level-like on this SDK.  Block
-        // briefly after consuming a snapshot so an immediately reasserted
-        // notification cannot monopolize the single application core.
-        struct timespec yield_time {0, GNSS_READER_YIELD_US * 1000L};
-        while (nanosleep(&yield_time, &yield_time) != 0 && errno == EINTR) {
         }
     }
 }
@@ -300,7 +290,7 @@ void run_gnss_reader(struct cxd56_gnss_positiondata2_s &position)
 void *gnss_init_thread(void *)
 {
     int fd = open(CONFIG_SPRESENSE_M1_COPTER_GNSS_DEVICE,
-                  O_RDONLY | O_NONBLOCK);
+                  O_RDONLY);
     if (fd < 0) {
         gnss_init_fail(fd);
         return nullptr;
@@ -323,16 +313,10 @@ void *gnss_init_thread(void *)
         return nullptr;
     }
 
-    auto *position = new (std::nothrow) cxd56_gnss_positiondata2_s {};
-    if (position == nullptr) {
-        gnss_init_fail(fd);
-        return nullptr;
-    }
     gnss_fd = fd;
     gnss_have_timestamp = false;
     __atomic_store_n(&gnss_init_state, GNSS_INIT_READY, __ATOMIC_RELEASE);
-    run_gnss_reader(*position);
-    delete position;
+    run_gnss_reader();
     return nullptr;
 }
 
