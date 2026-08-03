@@ -159,6 +159,8 @@ def main() -> int:
             "CONFIG_SPRESENSE_M1_COPTER_PWBIMU_DEVICE",
             "CXD56_GNSS_IOCTL_START",
             "SNIOC_SSAMPRATE",
+            "PWBIMU_POLL_TIMEOUT_MS",
+            "ready_to_read(pwbimu_fd, PWBIMU_POLL_TIMEOUT_MS)",
             "O_NONBLOCK",
             "return false;",
         ),

@@ -6,6 +6,9 @@ namespace {
 
 constexpr float GRAVITY_M_S2 = 9.80665f;
 constexpr uint16_t UNKNOWN_DOP = UINT16_MAX;
+#if defined(__NuttX__)
+constexpr int PWBIMU_POLL_TIMEOUT_MS = 1;
+#endif
 
 bool finite_position(const Spresense::GnssRawSample &raw)
 {
@@ -163,12 +166,12 @@ int checked_ioctl(int fd, int request, unsigned long argument)
     return 0;
 }
 
-bool ready_to_read(int fd)
+bool ready_to_read(int fd, int timeout_ms)
 {
     struct pollfd descriptor {fd, POLLIN, 0};
     int result;
     do {
-        result = poll(&descriptor, 1, 0);
+        result = poll(&descriptor, 1, timeout_ms);
     } while (result < 0 && errno == EINTR);
     return result > 0 && (descriptor.revents & POLLIN) != 0;
 }
@@ -215,7 +218,7 @@ bool Spresense::gnss_start()
 
 Spresense::SensorReadStatus Spresense::gnss_read(GnssSample &sample)
 {
-    if (gnss_fd < 0 || !ready_to_read(gnss_fd)) {
+    if (gnss_fd < 0 || !ready_to_read(gnss_fd, 0)) {
         return SensorReadStatus::NO_DATA;
     }
 
@@ -302,6 +305,15 @@ Spresense::SensorReadStatus Spresense::pwbimu_read(ImuSample &sample)
 {
     if (pwbimu_fd < 0) {
         return SensorReadStatus::ERROR;
+    }
+
+    // During Copter setup the scheduler's timer processes are intentionally
+    // held until setup() returns.  A bounded poll yields the high-priority
+    // main task so Sony's SPI5/DMAC driver can publish its first sample;
+    // nonblocking reads alone can otherwise starve that producer.  This is a
+    // readiness bound, not evidence for the eventual sensor-loop timing.
+    if (!ready_to_read(pwbimu_fd, PWBIMU_POLL_TIMEOUT_MS)) {
+        return SensorReadStatus::NO_DATA;
     }
 
     cxd5602pwbimu_data_t data {};
