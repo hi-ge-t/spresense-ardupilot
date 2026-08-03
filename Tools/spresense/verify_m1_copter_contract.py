@@ -226,7 +226,7 @@ def main() -> int:
             "+SPRESENSE_M1_COPTER_LINK=y",
             "+CXD56_GNSS_ADDON=y",
             "+SENSORS_CXD5610_GNSS=y",
-            "+SENSORS_CXD5610_GNSS_RX_THREAD_PRIORITY=185",
+            "+SENSORS_CXD5610_GNSS_RX_THREAD_PRIORITY=120",
             "+SENSORS_CXD5602PWBIMU=y",
             "+CXD56_GNSS_RAM=y",
             "+CXD56_GNSS_HEAP=y",

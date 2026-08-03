@@ -7,7 +7,7 @@ namespace {
 constexpr float GRAVITY_M_S2 = 9.80665f;
 constexpr uint16_t UNKNOWN_DOP = UINT16_MAX;
 #if defined(__NuttX__)
-constexpr int GNSS_POLL_TIMEOUT_MS = 0;
+constexpr int GNSS_POLL_TIMEOUT_MS = 5;
 constexpr int PWBIMU_POLL_TIMEOUT_MS = 1;
 #endif
 
@@ -311,10 +311,10 @@ bool Spresense::gnss_start()
 
 Spresense::SensorReadStatus Spresense::gnss_read(GnssSample &sample)
 {
-    // The dedicated profile runs Sony's CXD5610 receiver thread above the
-    // Copter main task.  Keep the AP_GPS read itself nonblocking; the profile
-    // and contract guard own that producer priority.  End-to-end GNSS timing
-    // remains a separate hardware HOLD item.
+    // Sony's CXD5610 receiver task stays below the Copter main task so its
+    // notification stream cannot monopolise the CPU.  This bounded poll gives
+    // that producer a scheduling window without turning sensor absence into
+    // an unbounded main-loop wait.  End-to-end timing remains a hardware HOLD.
     if (gnss_fd < 0 ||
         !ready_to_read(gnss_fd, GNSS_POLL_TIMEOUT_MS)) {
         return SensorReadStatus::NO_DATA;
