@@ -19,6 +19,23 @@ class CheckError(RuntimeError):
     pass
 
 
+TRANSIENT_ZERO_READ = "device reports readiness to read but returned no data"
+
+
+def tolerate_transient_zero_reads(link) -> None:
+    original_recv = link.recv
+
+    def recv(size=None):
+        try:
+            return original_recv(size)
+        except OSError as error:
+            if TRANSIENT_ZERO_READ in str(error):
+                return b""
+            raise
+
+    link.recv = recv
+
+
 def read_manifest(path: Path) -> dict[str, str]:
     values = {}
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -266,6 +283,7 @@ def main() -> int:
             autoreconnect=False,
             dialect="ardupilotmega",
         )
+        tolerate_transient_zero_reads(link)
         heartbeat = wait_copter_startup(
             link, mavutil.mavlink, args.startup_timeout
         )
