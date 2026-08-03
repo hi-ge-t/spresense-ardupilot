@@ -264,6 +264,9 @@ def main() -> int:
             "m1.arming=always-denied",
             "m1.physical_write_expected=0",
             "m1.sensor_fallback=disabled",
+            "m1.gnss.hal_integration=AP_GPS_Spresense",
+            "m1.pwbimu.hal_integration=AP_InertialSensor_Spresense",
+            "m1.sensor.hal_integration=GNSS+INS",
         ),
     )
 
