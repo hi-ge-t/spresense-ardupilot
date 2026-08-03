@@ -135,10 +135,15 @@ int main(void)
           }
         if (index == 5u)
           {
+            assert(memcmp(parameter.param_id, "M1_GNSS_ERR", 11u) == 0);
+            assert(parameter.param_value == 0.0f);
+          }
+        if (index == 6u)
+          {
             assert(memcmp(parameter.param_id, "M1_IMU_REQ", 10u) == 0);
             assert(parameter.param_value == 1.0f);
           }
-        if (index == 6u)
+        if (index == 7u)
           {
             assert(memcmp(parameter.param_id, "M1_IMU_OK", 9u) == 0);
             assert(parameter.param_value == 0.0f);
@@ -148,7 +153,7 @@ int main(void)
   }
 
 #ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
-  m1_gcs_protocol_set_gnss_ready(&protocol, 1);
+  m1_gcs_protocol_set_gnss_result(&protocol, 0);
   assert(m1_gcs_protocol_send_heartbeat(&protocol) == 0);
   count = decode_capture(&capture, messages, 8u);
   assert(count == 1u);
@@ -177,11 +182,15 @@ int main(void)
   assert(count == M1_GCS_PARAMETER_COUNT);
   {
     mavlink_param_value_t gnss_parameter;
+    mavlink_param_value_t gnss_error_parameter;
     mavlink_param_value_t imu_parameter;
     mavlink_msg_param_value_decode(&messages[4], &gnss_parameter);
-    mavlink_msg_param_value_decode(&messages[6], &imu_parameter);
+    mavlink_msg_param_value_decode(&messages[5], &gnss_error_parameter);
+    mavlink_msg_param_value_decode(&messages[7], &imu_parameter);
     assert(memcmp(gnss_parameter.param_id, "M1_GNSS_OK", 10u) == 0);
     assert(gnss_parameter.param_value == 1.0f);
+    assert(memcmp(gnss_error_parameter.param_id, "M1_GNSS_ERR", 11u) == 0);
+    assert(gnss_error_parameter.param_value == 0.0f);
     assert(memcmp(imu_parameter.param_id, "M1_IMU_OK", 9u) == 0);
     assert(imu_parameter.param_value == 1.0f);
   }

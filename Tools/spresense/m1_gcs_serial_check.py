@@ -144,6 +144,7 @@ def main() -> int:
         }
         if args.require_gnss:
             expected_parameters["M1_GNSS_OK"] = 1.0
+            expected_parameters["M1_GNSS_ERR"] = 0.0
         if args.require_pwbimu:
             expected_parameters.update({
                 "M1_IMU_REQ": 1.0,

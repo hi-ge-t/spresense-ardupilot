@@ -24,6 +24,7 @@ static const struct m1_parameter g_parameters[M1_GCS_PARAMETER_COUNT] =
   {"M1_STAGE", 1.0f},
 #ifdef CONFIG_SPRESENSE_M1_GNSS_RUNTIME_REQUIRED
   {"M1_GNSS_OK", 0.0f},
+  {"M1_GNSS_ERR", 0.0f},
 #endif
 #ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
   {"M1_IMU_REQ", 1.0f},
@@ -33,7 +34,8 @@ static const struct m1_parameter g_parameters[M1_GCS_PARAMETER_COUNT] =
 
 #ifdef CONFIG_SPRESENSE_M1_GNSS_RUNTIME_REQUIRED
 #define M1_GCS_GNSS_READY_PARAMETER 4u
-#define M1_GCS_PWBIMU_READY_PARAMETER 6u
+#define M1_GCS_GNSS_ERROR_PARAMETER 5u
+#define M1_GCS_PWBIMU_READY_PARAMETER 7u
 #elif defined(CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED)
 #define M1_GCS_PWBIMU_READY_PARAMETER 5u
 #endif
@@ -336,16 +338,17 @@ int m1_gcs_protocol_send_boot_status(struct m1_gcs_protocol *protocol)
   return m1_gcs_send_message(protocol, &message);
 }
 
-void m1_gcs_protocol_set_gnss_ready(struct m1_gcs_protocol *protocol,
-                                   int ready)
+void m1_gcs_protocol_set_gnss_result(struct m1_gcs_protocol *protocol,
+                                    int result)
 {
 #ifdef CONFIG_SPRESENSE_M1_GNSS_RUNTIME_REQUIRED
-  protocol->gnss_ready = ready != 0;
+  protocol->gnss_ready = result == 0;
   protocol->parameter_values[M1_GCS_GNSS_READY_PARAMETER] =
     protocol->gnss_ready ? 1.0f : 0.0f;
+  protocol->parameter_values[M1_GCS_GNSS_ERROR_PARAMETER] = (float)result;
 #else
   (void)protocol;
-  (void)ready;
+  (void)result;
 #endif
 }
 

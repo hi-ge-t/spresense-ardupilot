@@ -20,7 +20,9 @@ The diagnostic uses the ArduPilot-pinned `ardupilotmega` MAVLink v2 definition
 and identifies as `MAV_AUTOPILOT_ARDUPILOTMEGA`/quadrotor. It sends a 1 Hz
 HEARTBEAT, answers `AUTOPILOT_VERSION`, exposes four fixed read-only diagnostic
 parameters and rejects `MAV_CMD_COMPONENT_ARM_DISARM`. The combined profile
-adds read-only `M1_GNSS_OK`, `M1_IMU_REQ=1` and `M1_IMU_OK` parameters. It
+adds read-only `M1_GNSS_OK`, `M1_GNSS_ERR`, `M1_IMU_REQ=1` and `M1_IMU_OK`
+parameters. `M1_GNSS_ERR` preserves the bounded probe's zero or negative
+result for fail-closed diagnosis. It
 opens `/dev/gps2`, checks the CXD5610 firmware response, starts positioning,
 reads one bounded notification sample and stops positioning. It then opens
 `/dev/imu0` read-only, configures a bounded 60 Hz diagnostic capture, reads one
@@ -128,7 +130,8 @@ python3 Tools/spresense/m1_gcs_serial_check.py \
 ```
 
 This gate requires an ArduPilot heartbeat, `M1PGN001` AUTOPILOT_VERSION, all
-seven diagnostic parameters including `M1_GNSS_OK=1` and `M1_IMU_OK=1`, a
+eight diagnostic parameters including `M1_GNSS_OK=1`, `M1_GNSS_ERR=0` and
+`M1_IMU_OK=1`, a
 denied ARM acknowledgement and a later non-armed heartbeat. `M1_GNSS_OK=1`
 means that a bounded Add-on notification was read; it does not mean that a fix
 was obtained. QGroundControl is opened separately after this gate to confirm

@@ -196,7 +196,7 @@ int m1_gcs_runtime_main(int argc, char *argv[])
   (void)memory_layout_evidence;
   m1_gcs_protocol_init(&protocol, m1_gcs_enqueue, &transport);
 #ifdef CONFIG_SPRESENSE_M1_GNSS_RUNTIME_REQUIRED
-  m1_gcs_protocol_set_gnss_ready(&protocol, m1_gnss_probe_once() == 0);
+  m1_gcs_protocol_set_gnss_result(&protocol, m1_gnss_probe_once());
 #endif
 #ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
   m1_gcs_protocol_set_pwbimu_ready(&protocol,
