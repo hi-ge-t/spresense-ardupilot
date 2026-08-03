@@ -160,6 +160,8 @@ def main() -> int:
             'SPRESENSE_M1_COPTER_BOOT=HAL',
             'SPRESENSE_M1_COPTER_BOOT=SCHEDULER_FAIL',
             "sensor_bridge_platform_ready",
+            "scheduler_instance.hal_initialized();",
+            "while (!hal_ready())",
             "Empty::I2CDeviceManager i2c_manager",
             "Empty::SPIDeviceManager spi_manager",
         ),

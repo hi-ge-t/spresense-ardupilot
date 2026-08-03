@@ -13,6 +13,7 @@
 class Spresense::Scheduler : public AP_HAL::Scheduler {
 public:
     void init() override;
+    void hal_initialized();
     void delay(uint16_t delay_ms) override;
     void delay_microseconds(uint16_t delay_us) override;
     void register_timer_process(AP_HAL::MemberProc process) override;
@@ -46,6 +47,7 @@ private:
     void run_timer_processes();
     void run_io_processes();
     void mark_unhealthy();
+    bool hal_ready() const;
     bool initialized() const;
 
     MonotonicClock _clock;
@@ -62,11 +64,13 @@ private:
     uint8_t _timer_process_count = 0U;
     uint8_t _io_process_count = 0U;
     bool _system_initialized = false;
+    bool _hal_initialized = false;
     bool _main_thread_valid = false;
     bool _timing_healthy = true;
 #else
     MonotonicClock _clock;
     bool _system_initialized = false;
+    bool _hal_initialized = false;
     bool _timing_healthy = true;
 #endif
 };

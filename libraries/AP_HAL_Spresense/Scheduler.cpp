@@ -121,6 +121,14 @@ void Spresense::Scheduler::init()
     }
 }
 
+void Spresense::Scheduler::hal_initialized()
+{
+    if (hal_ready()) {
+        AP_HAL::panic("Spresense HAL initialized twice");
+    }
+    __atomic_store_n(&_hal_initialized, true, __ATOMIC_RELEASE);
+}
+
 void Spresense::Scheduler::delay(uint16_t delay_ms)
 {
     if (delay_ms == 0U) {
@@ -304,7 +312,7 @@ void *Spresense::Scheduler::user_thread_trampoline(void *context)
 
 void Spresense::Scheduler::timer_thread()
 {
-    while (!initialized()) {
+    while (!hal_ready()) {
         if (!_clock.delay_microseconds(TIMER_PERIOD_US)) {
             mark_unhealthy();
         }
@@ -329,7 +337,7 @@ void Spresense::Scheduler::timer_thread()
 
 void Spresense::Scheduler::io_thread()
 {
-    while (!initialized()) {
+    while (!hal_ready()) {
         if (!_clock.delay_microseconds(IO_PERIOD_US)) {
             mark_unhealthy();
         }
@@ -418,12 +426,22 @@ bool Spresense::Scheduler::initialized() const
     return __atomic_load_n(&_system_initialized, __ATOMIC_ACQUIRE);
 }
 
+bool Spresense::Scheduler::hal_ready() const
+{
+    return __atomic_load_n(&_hal_initialized, __ATOMIC_ACQUIRE);
+}
+
 #else
 
 void Spresense::Scheduler::init()
 {
     uint64_t unused_time = 0U;
     _timing_healthy = _clock.micros(unused_time);
+}
+
+void Spresense::Scheduler::hal_initialized()
+{
+    _hal_initialized = true;
 }
 
 void Spresense::Scheduler::delay(uint16_t delay_ms)
