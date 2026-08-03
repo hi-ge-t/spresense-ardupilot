@@ -13,6 +13,7 @@ constexpr uint16_t UNKNOWN_DOP = UINT16_MAX;
 #if defined(__NuttX__)
 constexpr int GNSS_NOTIFICATION_SIGNAL = 18;
 constexpr uint32_t GNSS_NOTIFICATION_WAIT_MS = 1250U;
+constexpr uint32_t GNSS_READER_YIELD_US = 1000U;
 constexpr int PWBIMU_POLL_TIMEOUT_MS = 1;
 #endif
 
@@ -374,6 +375,16 @@ void run_gnss_reader()
         if (!gnss_sample_reported) {
             gnss_sample_reported = true;
             gnss_marker("SPRESENSE_M1_GNSS=SAMPLE\n");
+        }
+
+        // The Add-on notification behaves like a level signal on this SDK.
+        // Yield after consuming a snapshot so an immediately reasserted
+        // signal cannot starve the PWBIMU producer on the application core.
+        // This is a scheduling guard, not a claim about flight-loop timing.
+        struct timespec yield_time {
+            0, static_cast<long>(GNSS_READER_YIELD_US) * 1000L
+        };
+        while (nanosleep(&yield_time, &yield_time) != 0 && errno == EINTR) {
         }
     }
 }
