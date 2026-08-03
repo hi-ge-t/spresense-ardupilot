@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -18,6 +19,25 @@ namespace {
 void storage_init_marker(const char *marker)
 {
     (void)::write(STDOUT_FILENO, marker, strlen(marker));
+}
+
+void storage_init_errno_marker(const char *stage, int error_number)
+{
+    static int last_open_error = 0;
+    static int last_truncate_error = 0;
+    int &last_error = strcmp(stage, "OPEN") == 0
+        ? last_open_error : last_truncate_error;
+    if (last_error == error_number) {
+        return;
+    }
+    last_error = error_number;
+    char marker[64] {};
+    const int length = snprintf(marker, sizeof(marker),
+        "SPRESENSE_M1_STORAGE=%s_ERRNO_%d\n", stage, error_number);
+    if (length > 0) {
+        (void)::write(STDOUT_FILENO, marker,
+                      static_cast<size_t>(length));
+    }
 }
 
 } // namespace
@@ -160,6 +180,7 @@ bool StorageFile::init(const char *path, size_t size)
     if (_fd < 0) {
 #if defined(__NuttX__)
         if (strcmp(path, STORAGE_PATH) == 0) {
+            storage_init_errno_marker("OPEN", errno);
             storage_init_marker(errno == EROFS
                 ? "SPRESENSE_M1_STORAGE=OPEN_EROFS\n"
                 : errno == EACCES
@@ -177,6 +198,7 @@ bool StorageFile::init(const char *path, size_t size)
     if (ftruncate(_fd, static_cast<off_t>(size)) != 0) {
 #if defined(__NuttX__)
         if (strcmp(path, STORAGE_PATH) == 0) {
+            storage_init_errno_marker("TRUNCATE", errno);
             storage_init_marker(errno == ENOSPC
                 ? "SPRESENSE_M1_STORAGE=TRUNCATE_ENOSPC\n"
                 : errno == EROFS
