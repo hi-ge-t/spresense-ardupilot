@@ -172,7 +172,10 @@ def main() -> int:
         storage,
         (
             "mkdir(STORAGE_DIRECTORY, 0777)",
-            "errno != EEXIST",
+            "errno == EEXIST",
+            "STORAGE_READY_ATTEMPTS = 31U",
+            "STORAGE_READY_DELAY_US = 100000U",
+            "clock.delay_microseconds(STORAGE_READY_DELAY_US)",
             "_storage.init(_path, STORAGE_SIZE)",
         ),
     )
