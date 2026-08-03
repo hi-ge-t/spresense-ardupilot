@@ -24,7 +24,8 @@ adds read-only `M1_GNSS_OK`, `M1_GNSS_ERR`, `M1_IMU_REQ=1` and `M1_IMU_OK`
 parameters. `M1_GNSS_ERR` preserves the bounded probe's zero or negative
 result for fail-closed diagnosis. It
 opens `/dev/gps2`, checks the CXD5610 firmware response, starts positioning,
-reads one bounded notification sample and stops positioning. It then opens
+waits at most 15 seconds for one notification sample and stops positioning.
+It then opens
 `/dev/imu0` read-only, configures a bounded 60 Hz diagnostic capture, reads one
 sample and stops the sensor. A failed probe leaves the corresponding `*_OK`
 parameter at zero and reports `MAV_STATE_CRITICAL`; neither probe enables

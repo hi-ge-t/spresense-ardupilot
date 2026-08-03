@@ -19,7 +19,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#define M1_GNSS_TIMEOUT_MS 3000
+#define M1_GNSS_TIMEOUT_MS 15000
 
 static struct cxd56_gnss_positiondata2_s g_m1_gnss_sample;
 
