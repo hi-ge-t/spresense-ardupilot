@@ -178,6 +178,11 @@ bool gnss_notification_reported;
 bool gnss_sample_reported;
 bool gnss_attach_reported;
 bool gnss_consumed_reported;
+bool pwbimu_read_after_gnss_reported;
+bool pwbimu_return_after_gnss_reported;
+bool pwbimu_sample_after_gnss_reported;
+bool pwbimu_eagain_after_gnss_reported;
+uint32_t pwbimu_eagain_after_gnss_count;
 constexpr uint8_t GNSS_INIT_IDLE = 0U;
 constexpr uint8_t GNSS_INIT_STARTING = 1U;
 constexpr uint8_t GNSS_INIT_READY = 2U;
@@ -577,16 +582,36 @@ Spresense::SensorReadStatus Spresense::pwbimu_read(ImuSample &sample)
         return SensorReadStatus::ERROR;
     }
 
+    const bool gnss_started = __atomic_load_n(
+        &gnss_init_state, __ATOMIC_ACQUIRE) != GNSS_INIT_IDLE;
+    if (gnss_started && !pwbimu_read_after_gnss_reported) {
+        pwbimu_read_after_gnss_reported = true;
+        gnss_marker("SPRESENSE_M1_PWBIMU=READ_AFTER_GNSS\n");
+    }
+
     cxd5602pwbimu_data_t data {};
     ssize_t length;
     do {
         length = read(pwbimu_fd, &data, sizeof(data));
     } while (length < 0 && errno == EINTR);
+    if (gnss_started && !pwbimu_return_after_gnss_reported) {
+        pwbimu_return_after_gnss_reported = true;
+        gnss_marker("SPRESENSE_M1_PWBIMU=READ_RETURNED\n");
+    }
     if (length < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        if (gnss_started && ++pwbimu_eagain_after_gnss_count >= 1000U &&
+            !pwbimu_eagain_after_gnss_reported) {
+            pwbimu_eagain_after_gnss_reported = true;
+            gnss_marker("SPRESENSE_M1_PWBIMU=EAGAIN_1000\n");
+        }
         return SensorReadStatus::NO_DATA;
     }
     if (length != static_cast<ssize_t>(sizeof(data))) {
         return SensorReadStatus::ERROR;
+    }
+    if (gnss_started && !pwbimu_sample_after_gnss_reported) {
+        pwbimu_sample_after_gnss_reported = true;
+        gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE_AFTER_GNSS\n");
     }
 
     // Sony's PWBIMU stream supplies gyro in rad/s and acceleration in g.
