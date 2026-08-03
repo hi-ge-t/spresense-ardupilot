@@ -8,6 +8,7 @@ constexpr float GRAVITY_M_S2 = 9.80665f;
 constexpr uint16_t UNKNOWN_DOP = UINT16_MAX;
 #if defined(__NuttX__)
 constexpr int GNSS_READER_POLL_TIMEOUT_MS = 1000;
+constexpr uint32_t GNSS_READER_YIELD_US = 1000U;
 constexpr int PWBIMU_POLL_TIMEOUT_MS = 1;
 #endif
 
@@ -153,6 +154,7 @@ bool Spresense::convert_imu_sample(const ImuRawSample &raw,
 #include <stdint.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <time.h>
 #include <unistd.h>
 
 namespace {
@@ -219,6 +221,17 @@ void gnss_priority_marker(const char *role)
     const int length = snprintf(marker, sizeof(marker),
                                 "SPRESENSE_M1_GNSS=%s_PRIORITY_%d\n",
                                 role, scheduling.sched_priority);
+    if (length > 0 && length < static_cast<int>(sizeof(marker))) {
+        (void)write(STDOUT_FILENO, marker, static_cast<size_t>(length));
+    }
+}
+
+void gnss_lock_marker(const char *role)
+{
+    char marker[64] {};
+    const int length = snprintf(marker, sizeof(marker),
+                                "SPRESENSE_M1_GNSS=%s_LOCK_%d\n",
+                                role, sched_lockcount());
     if (length > 0 && length < static_cast<int>(sizeof(marker))) {
         (void)write(STDOUT_FILENO, marker, static_cast<size_t>(length));
     }
@@ -311,6 +324,14 @@ void run_gnss_reader()
         if (!sample_reported) {
             sample_reported = true;
             gnss_init_marker("SPRESENSE_M1_GNSS=SAMPLE\n");
+            gnss_lock_marker("SAMPLE");
+        }
+
+        // The CXD5610 poll notification is level-like on this SDK.  Block
+        // briefly after consuming a snapshot so an immediately reasserted
+        // notification cannot monopolize the single application core.
+        struct timespec yield_time {0, GNSS_READER_YIELD_US * 1000L};
+        while (nanosleep(&yield_time, &yield_time) != 0 && errno == EINTR) {
         }
     }
 }
@@ -319,6 +340,7 @@ void *gnss_init_thread(void *)
 {
     gnss_init_marker("SPRESENSE_M1_GNSS=THREAD\n");
     gnss_priority_marker("INIT");
+    gnss_lock_marker("INIT");
     int fd = open(CONFIG_SPRESENSE_M1_COPTER_GNSS_DEVICE,
                   O_RDONLY | O_NONBLOCK);
     if (fd < 0) {
@@ -346,6 +368,7 @@ void *gnss_init_thread(void *)
         return nullptr;
     }
     gnss_init_marker("SPRESENSE_M1_GNSS=START\n");
+    gnss_lock_marker("START");
 
     gnss_fd = fd;
     gnss_have_timestamp = false;
@@ -427,6 +450,7 @@ bool Spresense::gnss_start()
             &gnss_init_state, GNSS_INIT_FAILED, __ATOMIC_RELEASE);
         return false;
     }
+    gnss_lock_marker("MAIN_RETURN");
     return false;
 }
 
