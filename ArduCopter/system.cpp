@@ -1,5 +1,20 @@
 #include "Copter.h"
 #include <AP_ESC_Telem/AP_ESC_Telem.h>
+#if CONFIG_HAL_BOARD == HAL_BOARD_SPRESENSE
+#include <string.h>
+#include <unistd.h>
+
+namespace {
+
+void spresense_init_marker(const char *marker)
+{
+    (void)write(STDOUT_FILENO, marker, strlen(marker));
+}
+
+} // namespace
+#else
+static void spresense_init_marker(const char *) {}
+#endif
 
 /*****************************************************************************
 *   The init_ardupilot function processes everything we need for an in - air restart
@@ -15,6 +30,7 @@ static void failsafe_check_static()
 
 void Copter::init_ardupilot()
 {
+    spresense_init_marker("SPRESENSE_M1_INIT=START\n");
     // init winch
 #if AP_WINCH_ENABLED
     g2.winch.init();
@@ -23,6 +39,7 @@ void Copter::init_ardupilot()
     // initialise notify system
     notify.init();
     notify_flight_mode();
+    spresense_init_marker("SPRESENSE_M1_INIT=NOTIFY_AFTER\n");
 
     // initialise battery monitor
     battery.init();
@@ -33,9 +50,11 @@ void Copter::init_ardupilot()
 #endif
 
     barometer.init();
+    spresense_init_marker("SPRESENSE_M1_INIT=BARO_INIT_AFTER\n");
 
     // setup telem slots with serial ports
     gcs().setup_uarts();
+    spresense_init_marker("SPRESENSE_M1_INIT=GCS_UARTS_AFTER\n");
 
 #if OSD_ENABLED
     osd.init();
@@ -53,6 +72,7 @@ void Copter::init_ardupilot()
 #endif
 
     init_rc_in();               // sets up rc channels from radio
+    spresense_init_marker("SPRESENSE_M1_INIT=RC_IN_AFTER\n");
 
 #if AP_RANGEFINDER_ENABLED
     // initialise surface to be tracked in SurfaceTracking
@@ -62,6 +82,7 @@ void Copter::init_ardupilot()
 
     // allocate the motors class
     allocate_motors();
+    spresense_init_marker("SPRESENSE_M1_INIT=MOTORS_AFTER\n");
 
     // initialise rc channels including setting mode
     rc().convert_options(RC_Channel::AUX_FUNC::ARMDISARM_UNUSED, RC_Channel::AUX_FUNC::ARMDISARM_AIRMODE);
@@ -69,6 +90,7 @@ void Copter::init_ardupilot()
 
     // sets up motors and output to escs
     init_rc_out();
+    spresense_init_marker("SPRESENSE_M1_INIT=RC_OUT_AFTER\n");
 
     // check if we should enter esc calibration mode
     esc_calibration_startup_check();
@@ -85,13 +107,16 @@ void Copter::init_ardupilot()
      *  the RC library being initialised.
      */
     hal.scheduler->register_timer_failsafe(failsafe_check_static, 1000);
+    spresense_init_marker("SPRESENSE_M1_INIT=FAILSAFE_AFTER\n");
 
     // Do GPS init
     gps.set_log_gps_bit(MASK_LOG_GPS);
     gps.init();
+    spresense_init_marker("SPRESENSE_M1_INIT=GPS_AFTER\n");
 
     AP::compass().set_log_bit(MASK_LOG_COMPASS);
     AP::compass().init();
+    spresense_init_marker("SPRESENSE_M1_INIT=COMPASS_AFTER\n");
 
 #if AP_AIRSPEED_ENABLED
     airspeed.set_log_bit(MASK_LOG_IMU);
@@ -135,7 +160,9 @@ void Copter::init_ardupilot()
     // read Baro pressure at ground
     //-----------------------------
     barometer.set_log_baro_bit(MASK_LOG_IMU);
+    spresense_init_marker("SPRESENSE_M1_INIT=BARO_CAL_BEFORE\n");
     barometer.calibrate();
+    spresense_init_marker("SPRESENSE_M1_INIT=BARO_CAL_AFTER\n");
 
 #if AP_RANGEFINDER_ENABLED
     // initialise rangefinder
@@ -170,7 +197,9 @@ void Copter::init_ardupilot()
     logger.setVehicle_Startup_Writer(FUNCTOR_BIND(&copter, &Copter::Log_Write_Vehicle_Startup_Messages, void));
 #endif
 
+    spresense_init_marker("SPRESENSE_M1_INIT=INS_BEFORE\n");
     startup_INS_ground();
+    spresense_init_marker("SPRESENSE_M1_INIT=INS_AFTER\n");
 
 #if AC_CUSTOMCONTROL_MULTI_ENABLED
     custom_control.init();
@@ -198,6 +227,7 @@ void Copter::init_ardupilot()
 
     // flag that initialisation has completed
     ap.initialised = true;
+    spresense_init_marker("SPRESENSE_M1_INIT=DONE\n");
 }
 
 
