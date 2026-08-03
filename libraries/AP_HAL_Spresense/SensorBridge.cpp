@@ -7,6 +7,7 @@ namespace {
 constexpr float GRAVITY_M_S2 = 9.80665f;
 constexpr uint16_t UNKNOWN_DOP = UINT16_MAX;
 #if defined(__NuttX__)
+constexpr int GNSS_POLL_TIMEOUT_MS = 5;
 constexpr int PWBIMU_POLL_TIMEOUT_MS = 1;
 #endif
 
@@ -218,7 +219,12 @@ bool Spresense::gnss_start()
 
 Spresense::SensorReadStatus Spresense::gnss_read(GnssSample &sample)
 {
-    if (gnss_fd < 0 || !ready_to_read(gnss_fd, 0)) {
+    // The CXD5610 receiver runs in a lower-priority Sony driver thread.
+    // Bounded polling yields the Copter main task long enough for a complete
+    // notification to be published without turning absence into an unbounded
+    // wait.  GNSS update latency remains a separate hardware HOLD item.
+    if (gnss_fd < 0 ||
+        !ready_to_read(gnss_fd, GNSS_POLL_TIMEOUT_MS)) {
         return SensorReadStatus::NO_DATA;
     }
 

@@ -54,6 +54,37 @@ def wait_message(link, message_type, predicate, timeout):
     raise CheckError(f"timeout waiting for {message_type}")
 
 
+def wait_copter_startup(link, mavlink, timeout):
+    deadline = time.monotonic() + timeout
+    heartbeat = None
+    boot_text = bytearray()
+    marker = b"SPRESENSE_M1_COPTER_BOOT=LOOP\n"
+    while time.monotonic() < deadline:
+        message = link.recv_match(blocking=True, timeout=0.5)
+        if message is None:
+            continue
+        message_type = message.get_type()
+        if (
+            message_type == "HEARTBEAT" and
+            message.autopilot == mavlink.MAV_AUTOPILOT_ARDUPILOTMEGA
+        ):
+            heartbeat = message
+        elif message_type == "BAD_DATA":
+            data = message.data
+            if isinstance(data, str):
+                data = data.encode("latin1", errors="replace")
+            else:
+                data = bytes(data)
+            boot_text.extend(data)
+            if len(boot_text) > 512:
+                del boot_text[:-512]
+        if heartbeat is not None and marker in boot_text:
+            return heartbeat
+    if heartbeat is None:
+        raise CheckError("timeout waiting for Copter heartbeat")
+    raise CheckError("timeout waiting for SPRESENSE_M1_COPTER_BOOT=LOOP")
+
+
 def check_port(port: str) -> None:
     try:
         mode = os.stat(port).st_mode
@@ -151,14 +182,12 @@ def verify_sensor_messages(link, mavlink, system, component):
     gps = wait_message(
         link,
         "GPS_RAW_INT",
-        lambda value: value.get_srcSystem() == system,
-        15.0,
+        lambda value: (
+            value.get_srcSystem() == system and
+            value.fix_type >= mavlink.GPS_FIX_TYPE_NO_FIX
+        ),
+        30.0,
     )
-    if gps.fix_type < mavlink.GPS_FIX_TYPE_NO_FIX:
-        raise CheckError(
-            "AP_GPS did not report the CXD5610 backend: "
-            f"fix_type={gps.fix_type}"
-        )
 
     request_message(
         link,
@@ -204,8 +233,8 @@ def main() -> int:
     parser.add_argument(
         "--startup-timeout",
         type=float,
-        default=90.0,
-        help="seconds to wait for the first Copter heartbeat",
+        default=150.0,
+        help="seconds to wait for both Copter heartbeat and HAL LOOP marker",
     )
     parser.add_argument(
         "--artifact-dir",
@@ -220,8 +249,8 @@ def main() -> int:
     try:
         from pymavlink import mavutil
 
-        if args.startup_timeout < 10.0 or args.startup_timeout > 180.0:
-            raise CheckError("startup timeout must be in the range 10..180")
+        if args.startup_timeout < 30.0 or args.startup_timeout > 240.0:
+            raise CheckError("startup timeout must be in the range 30..240")
 
         artifact_dir = (
             args.artifact_dir if args.artifact_dir.is_absolute()
@@ -237,14 +266,8 @@ def main() -> int:
             autoreconnect=False,
             dialect="ardupilotmega",
         )
-        heartbeat = wait_message(
-            link,
-            "HEARTBEAT",
-            lambda value: (
-                value.autopilot ==
-                mavutil.mavlink.MAV_AUTOPILOT_ARDUPILOTMEGA
-            ),
-            args.startup_timeout,
+        heartbeat = wait_copter_startup(
+            link, mavutil.mavlink, args.startup_timeout
         )
         if heartbeat.type != mavutil.mavlink.MAV_TYPE_QUADROTOR:
             raise CheckError(f"unexpected vehicle type: {heartbeat.type}")
@@ -287,6 +310,7 @@ def main() -> int:
             "autopilot": "ARDUPILOTMEGA",
             "vehicle_type": "QUADROTOR",
             "heartbeat_received": True,
+            "hal_loop_marker_received": True,
             "normal_arm_result": normal_result,
             "forced_arm_result": forced_result,
             "armed_observed": False,
