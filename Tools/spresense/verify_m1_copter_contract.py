@@ -287,6 +287,7 @@ def main() -> int:
             "+SENSORS_CXD5602PWBIMU=y",
             "+CXD56_GNSS_RAM=y",
             "+CXD56_GNSS_HEAP=y",
+            "+CXD56_SDIO=y",
             "+FS_AUTOMOUNTER=y",
             "+CXD56_SDCARD_AUTOMOUNT=y",
             '+CXD56_SDCARD_AUTOMOUNT_FSTYPE="vfat"',
