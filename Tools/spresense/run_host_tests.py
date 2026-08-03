@@ -68,24 +68,29 @@ def main() -> int:
             subprocess.run(adapter_command, cwd=root, check=True)
 
         mavlink_headers = generate(root)
-        gcs_binary = temporary_path / "test_m1_gcs_protocol"
-        gcs_command = [
-            os.environ.get("CC") or shutil.which("cc") or "cc",
-            "-std=c11",
-            "-Wall",
-            "-Wextra",
-            "-Werror",
-            "-I",
-            str(mavlink_headers),
-            "-I",
-            str(root / "Tools/spresense/m1_gcs_app"),
-            str(root / "Tools/spresense/m1_gcs_app/m1_gcs_protocol.c"),
-            str(root / "Tools/spresense/tests/test_m1_gcs_protocol.c"),
-            "-o",
-            str(gcs_binary),
-        ]
-        subprocess.run(gcs_command, cwd=root, check=True)
-        subprocess.run([str(gcs_binary)], cwd=root, check=True)
+        for name, defines in (
+            ("legacy", []),
+            ("pwbimu", ["-DCONFIG_SPRESENSE_M1_PWBIMU_REQUIRED=1"]),
+        ):
+            gcs_binary = temporary_path / f"test_m1_gcs_protocol_{name}"
+            gcs_command = [
+                os.environ.get("CC") or shutil.which("cc") or "cc",
+                "-std=c11",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                *defines,
+                "-I",
+                str(mavlink_headers),
+                "-I",
+                str(root / "Tools/spresense/m1_gcs_app"),
+                str(root / "Tools/spresense/m1_gcs_app/m1_gcs_protocol.c"),
+                str(root / "Tools/spresense/tests/test_m1_gcs_protocol.c"),
+                "-o",
+                str(gcs_binary),
+            ]
+            subprocess.run(gcs_command, cwd=root, check=True)
+            subprocess.run([str(gcs_binary)], cwd=root, check=True)
 
     subprocess.run(
         [sys.executable, str(root / "Tools/spresense/verify_m1_contract.py")],

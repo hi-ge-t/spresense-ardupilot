@@ -31,4 +31,18 @@ config SPRESENSE_M1_GCS_BAUD
 	int "MAVLink baud rate"
 	default 115200
 
+config SPRESENSE_M1_PWBIMU_REQUIRED
+	bool "Require CXD5602PWBIMU diagnostic probe"
+	default n
+	depends on SENSORS_CXD5602PWBIMU
+	---help---
+		Require the Sony Multi-IMU Add-on at /dev/imu0. The M1 diagnostic
+		performs one bounded sensor sample probe during startup and keeps
+		arming and every physical output disabled regardless of the result.
+
+config SPRESENSE_M1_PWBIMU_DEVICE
+	string "CXD5602PWBIMU device"
+	default "/dev/imu0"
+	depends on SPRESENSE_M1_PWBIMU_REQUIRED
+
 endif

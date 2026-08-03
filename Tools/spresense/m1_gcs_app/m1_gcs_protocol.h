@@ -17,7 +17,11 @@ extern "C" {
 
 #define M1_GCS_SYSTEM_ID 1u
 #define M1_GCS_COMPONENT_ID MAV_COMP_ID_AUTOPILOT1
+#ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
+#define M1_GCS_PARAMETER_COUNT 6u
+#else
 #define M1_GCS_PARAMETER_COUNT 4u
+#endif
 
 typedef int (*m1_gcs_send_fn)(void *context, const uint8_t *bytes,
                               size_t length);
@@ -33,6 +37,10 @@ struct m1_gcs_protocol
   uint32_t transmitted_messages;
   uint32_t arm_reject_count;
   uint32_t parameter_write_reject_count;
+  float parameter_values[M1_GCS_PARAMETER_COUNT];
+#ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
+  uint8_t pwbimu_ready;
+#endif
 };
 
 void m1_gcs_protocol_init(struct m1_gcs_protocol *protocol,
@@ -41,6 +49,8 @@ void m1_gcs_protocol_receive(struct m1_gcs_protocol *protocol,
                              const uint8_t *bytes, size_t length);
 int m1_gcs_protocol_send_heartbeat(struct m1_gcs_protocol *protocol);
 int m1_gcs_protocol_send_boot_status(struct m1_gcs_protocol *protocol);
+void m1_gcs_protocol_set_pwbimu_ready(struct m1_gcs_protocol *protocol,
+                                     int ready);
 uint32_t m1_gcs_physical_write_count(void);
 
 #ifdef __cplusplus

@@ -63,6 +63,7 @@ int main(void)
   mavlink_status_t gcs_tx = {0};
   mavlink_message_t messages[8];
   mavlink_message_t request;
+  const char output_parameter_id[16] = "M1_OUT_EN";
   size_t count;
 
   m1_gcs_protocol_init(&protocol, capture_send, &capture);
@@ -76,6 +77,11 @@ int main(void)
     assert(heartbeat.type == MAV_TYPE_QUADROTOR);
     assert(heartbeat.autopilot == MAV_AUTOPILOT_ARDUPILOTMEGA);
     assert((heartbeat.base_mode & MAV_MODE_FLAG_SAFETY_ARMED) == 0u);
+#ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
+    assert(heartbeat.system_status == MAV_STATE_CRITICAL);
+#else
+    assert(heartbeat.system_status == MAV_STATE_STANDBY);
+#endif
   }
 
   mavlink_msg_command_long_pack_status(
@@ -95,7 +101,11 @@ int main(void)
     mavlink_msg_command_ack_decode(&messages[1], &ack);
     assert((version.flight_sw_version >> 24) == 4u);
     assert(((version.flight_sw_version >> 16) & 0xffu) == 7u);
+#ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
+    assert(memcmp(version.flight_custom_version, "M1PIM001", 8u) == 0);
+#else
     assert(memcmp(version.flight_custom_version, "M1GCS001", 8u) == 0);
+#endif
     assert(ack.command == MAV_CMD_REQUEST_MESSAGE);
     assert(ack.result == MAV_RESULT_ACCEPTED);
   }
@@ -114,8 +124,61 @@ int main(void)
         mavlink_msg_param_value_decode(&messages[index], &parameter);
         assert(parameter.param_count == M1_GCS_PARAMETER_COUNT);
         assert(parameter.param_index == index);
+#ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
+        if (index == 4u)
+          {
+            assert(memcmp(parameter.param_id, "M1_IMU_REQ", 10u) == 0);
+            assert(parameter.param_value == 1.0f);
+          }
+        if (index == 5u)
+          {
+            assert(memcmp(parameter.param_id, "M1_IMU_OK", 9u) == 0);
+            assert(parameter.param_value == 0.0f);
+          }
+#endif
       }
   }
+
+#ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
+  m1_gcs_protocol_set_pwbimu_ready(&protocol, 1);
+  assert(m1_gcs_protocol_send_heartbeat(&protocol) == 0);
+  count = decode_capture(&capture, messages, 8u);
+  assert(count == 1u);
+  {
+    mavlink_heartbeat_t heartbeat;
+    mavlink_msg_heartbeat_decode(&messages[0], &heartbeat);
+    assert(heartbeat.system_status == MAV_STATE_STANDBY);
+    assert((heartbeat.base_mode & MAV_MODE_FLAG_SAFETY_ARMED) == 0u);
+  }
+
+  mavlink_msg_param_request_list_pack_status(
+    255u, MAV_COMP_ID_MISSIONPLANNER, &gcs_tx, &request, M1_GCS_SYSTEM_ID,
+    M1_GCS_COMPONENT_ID);
+  deliver_message(&protocol, &request);
+  count = decode_capture(&capture, messages, 8u);
+  assert(count == M1_GCS_PARAMETER_COUNT);
+  {
+    mavlink_param_value_t parameter;
+    mavlink_msg_param_value_decode(&messages[5], &parameter);
+    assert(memcmp(parameter.param_id, "M1_IMU_OK", 9u) == 0);
+    assert(parameter.param_value == 1.0f);
+  }
+#endif
+
+  mavlink_msg_param_set_pack_status(
+    255u, MAV_COMP_ID_MISSIONPLANNER, &gcs_tx, &request, M1_GCS_SYSTEM_ID,
+    M1_GCS_COMPONENT_ID, output_parameter_id, 1.0f,
+    MAV_PARAM_TYPE_REAL32);
+  deliver_message(&protocol, &request);
+  count = decode_capture(&capture, messages, 8u);
+  assert(count == 1u);
+  {
+    mavlink_param_value_t parameter;
+    mavlink_msg_param_value_decode(&messages[0], &parameter);
+    assert(memcmp(parameter.param_id, "M1_OUT_EN", 9u) == 0);
+    assert(parameter.param_value == 0.0f);
+  }
+  assert(protocol.parameter_write_reject_count == 1u);
 
   mavlink_msg_command_long_pack_status(
     255u, MAV_COMP_ID_MISSIONPLANNER, &gcs_tx, &request,
@@ -133,6 +196,8 @@ int main(void)
   assert(protocol.arm_reject_count == 1u);
   assert(m1_gcs_physical_write_count() == 0u);
 
-  puts("spresense_m1_gcs_protocol=PASS heartbeat=ardupilotmega params=4 arm=DENIED physical_writes=0");
+  printf("spresense_m1_gcs_protocol=PASS heartbeat=ardupilotmega "
+         "params=%u arm=DENIED physical_writes=0\n",
+         (unsigned int)M1_GCS_PARAMETER_COUNT);
   return 0;
 }

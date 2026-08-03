@@ -19,6 +19,9 @@ CSRCS += m1_gcs_memory_layout.c
 CSRCS += m1_gcs_memory_rodata.c
 CSRCS += m1_gcs_runtime.c
 CSRCS += m1_gcs_boot.c
+ifeq ($(CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED),y)
+CSRCS += m1_pwbimu_probe.c
+endif
 MAINSRC = m1_gcs_main.c
 
 CFLAGS += ${INCDIR_PREFIX}$(M1_REPO_ROOT)/build/spresense-m1-generated

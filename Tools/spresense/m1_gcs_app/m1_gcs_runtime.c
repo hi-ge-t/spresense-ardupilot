@@ -5,6 +5,9 @@
 #include "m1_gcs_protocol.h"
 #include "m1_gcs_memory_layout.h"
 #include "m1_gcs_runtime.h"
+#ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
+#include "m1_pwbimu_probe.h"
+#endif
 
 #include <errno.h>
 #include <fcntl.h>
@@ -189,6 +192,10 @@ int m1_gcs_runtime_main(int argc, char *argv[])
   memory_layout_evidence = m1_gcs_memory_layout_touch();
   (void)memory_layout_evidence;
   m1_gcs_protocol_init(&protocol, m1_gcs_enqueue, &transport);
+#ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
+  m1_gcs_protocol_set_pwbimu_ready(&protocol,
+                                   m1_pwbimu_probe_once() == 0);
+#endif
 
   for (;;)
     {

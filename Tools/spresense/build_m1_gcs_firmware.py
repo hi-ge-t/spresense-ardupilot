@@ -17,8 +17,10 @@ from mavlink_headers import MAVLINK_COMMIT, generate
 
 
 SDK_COMMIT = "7fd61b2c03f06a4ff0302b84c755e58c338788b2"
-PROFILE = "spresense-m1-gcs"
-REQUIRED_CONFIG = {
+LEGACY_PROFILE = "spresense-m1-gcs"
+PWBIMU_PROFILE = "spresense-m1-pwbimu-gnss-gcs"
+DEFAULT_PROFILE = PWBIMU_PROFILE
+BASE_REQUIRED_CONFIG = {
     "CONFIG_SPRESENSE_M1_GCS=y",
     'CONFIG_SPRESENSE_M1_GCS_DEVICE="/dev/ttyS0"',
     "CONFIG_SPRESENSE_M1_GCS_BAUD=115200",
@@ -42,6 +44,30 @@ REQUIRED_CONFIG = {
     'CONFIG_INIT_ENTRYPOINT="spresense_main"',
     "CONFIG_INIT_PRIORITY=180",
     "CONFIG_INIT_STACKSIZE=32768",
+}
+PROFILE_SPECS = {
+    LEGACY_PROFILE: {
+        "config": "m1_gcs_app/gcs",
+        "artifact_dir": "build/spresense-m1-gcs-artifacts",
+        "required_config": BASE_REQUIRED_CONFIG | {
+            "# CONFIG_SENSORS_CXD5602PWBIMU is not set",
+        },
+        "pwbimu": "disabled",
+    },
+    PWBIMU_PROFILE: {
+        "config": "m1_gcs_app/pwbimu_gnss_gcs",
+        "artifact_dir": "build/spresense-m1-pwbimu-gnss-gcs-artifacts",
+        "required_config": BASE_REQUIRED_CONFIG | {
+            "CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED=y",
+            'CONFIG_SPRESENSE_M1_PWBIMU_DEVICE="/dev/imu0"',
+            "CONFIG_SENSORS_CXD5602PWBIMU=y",
+            "CONFIG_CXD56_CXD5602PWBIMU_SPI5_DMAC=y",
+            "CONFIG_CXD56_SPI5=y",
+            "CONFIG_CXD56_SPI5_PINMAP_EMMC=y",
+            "# CONFIG_CXD56_EMMC is not set",
+        },
+        "pwbimu": "required",
+    },
 }
 
 
@@ -73,9 +99,9 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def verify_config(config: Path) -> None:
+def verify_config(config: Path, required_config: set[str]) -> None:
     lines = set(config.read_text(encoding="utf-8").splitlines())
-    missing = sorted(REQUIRED_CONFIG - lines)
+    missing = sorted(required_config - lines)
     if missing:
         raise RuntimeError("configuration contract: " + " | ".join(missing))
 
@@ -123,6 +149,12 @@ def parser() -> argparse.ArgumentParser:
     )
     value.add_argument("--jobs", type=int, default=2)
     value.add_argument(
+        "--profile",
+        choices=sorted(PROFILE_SPECS),
+        default=DEFAULT_PROFILE,
+        help=f"target profile (default: {DEFAULT_PROFILE})",
+    )
+    value.add_argument(
         "--reuse-config",
         action="store_true",
         help="reuse the current verified Sony SDK configuration",
@@ -138,7 +170,9 @@ def main() -> int:
     nuttx = sdk_root / "nuttx"
     toolchain = Path.home() / "spresenseenv/usr/bin"
     compiler = toolchain / "arm-none-eabi-gcc"
-    artifact_dir = root / "build/spresense-m1-gcs-artifacts"
+    profile = arguments.profile
+    profile_spec = PROFILE_SPECS[profile]
+    artifact_dir = root / profile_spec["artifact_dir"]
     env = os.environ.copy()
     env["PATH"] = f"{toolchain}:{env.get('PATH', '')}"
     env["SPRESENSE_HOME"] = str(root / "Tools/spresense")
@@ -176,11 +210,11 @@ def main() -> int:
             generate_kconfig(root, sdk_root, env)
             run(
                 [sys.executable, "tools/config.py", "default",
-                 "m1_gcs_app/gcs"],
+                 profile_spec["config"]],
                 cwd=sdk,
                 env=env,
             )
-        verify_config(nuttx / ".config")
+        verify_config(nuttx / ".config", profile_spec["required_config"])
         libgcc = run(
             [compiler, "-mlittle-endian", "-march=armv7e-m",
              "-mtune=cortex-m4", "-mfpu=fpv4-sp-d16",
@@ -232,9 +266,35 @@ def main() -> int:
         entry = [line for line in nm_output if line.endswith(" spresense_main")]
         if len(entry) != 1 or " T " not in f" {entry[0]} ":
             raise RuntimeError(f"spresense_main symbol is not unique/strong: {entry}")
+        symbol_names = {
+            line.split()[-1]
+            for line in nm_output
+            if len(line.split()) >= 3
+        }
+        pwbimu_symbols = {
+            "m1_pwbimu_probe_once",
+            "board_cxd5602pwbimu_initialize",
+            "cxd5602pwbimu_register",
+        }
+        if profile_spec["pwbimu"] == "required":
+            missing_symbols = sorted(
+                (pwbimu_symbols | {"cxd5610_gnss_register"}) - symbol_names
+            )
+            if missing_symbols:
+                raise RuntimeError(
+                    "required sensor symbol missing: "
+                    + " | ".join(missing_symbols)
+                )
+        else:
+            unexpected_symbols = sorted(pwbimu_symbols & symbol_names)
+            if unexpected_symbols:
+                raise RuntimeError(
+                    "legacy profile contains Multi-IMU symbol: "
+                    + " | ".join(unexpected_symbols)
+                )
 
         manifest_values = {
-            "profile": PROFILE,
+            "profile": profile,
             "project_commit": project_commit,
             "project_tree": "dirty" if dirty else "clean",
             "sdk_commit": SDK_COMMIT,
@@ -246,10 +306,40 @@ def main() -> int:
             "m1.gnss.addon": "required",
             "m1.gnss.device": "/dev/gps2",
             "m1.gnss.ram": "required",
+            "m1.pwbimu.addon": profile_spec["pwbimu"],
+            "m1.pwbimu.device": (
+                "/dev/imu0" if profile_spec["pwbimu"] == "required"
+                else "none"
+            ),
+            "m1.pwbimu.probe": (
+                "one-bounded-sample" if profile_spec["pwbimu"] == "required"
+                else "disabled"
+            ),
+            "m1.pwbimu.bus": (
+                "SPI5" if profile_spec["pwbimu"] == "required" else "none"
+            ),
+            "m1.pwbimu.pinshare": (
+                "eMMC" if profile_spec["pwbimu"] == "required" else "none"
+            ),
+            "m1.pwbimu.link_guard": (
+                "required" if profile_spec["pwbimu"] == "required"
+                else "absent"
+            ),
+            "m1.pwbimu.runtime": (
+                "hardware-HOLD" if profile_spec["pwbimu"] == "required"
+                else "not-required"
+            ),
+            "m1.sensor_fallback": "disabled",
             "m1.outputs": "disabled",
             "m1.arming": "always-denied",
             "m1.physical_write_expected": "0",
             "m1.flight_ready": "false",
+            "m1.storage.automatic_fallback": "disabled",
+            "m1.storage.pwbimu_emmc_coexistence": (
+                "hardware-design-HOLD"
+                if profile_spec["pwbimu"] == "required"
+                else "not-applicable"
+            ),
         }
         for name in (*sources, "memory-layout.json"):
             manifest_values[f"artifact.{name}.sha256"] = sha256(
@@ -273,7 +363,8 @@ def main() -> int:
 
     print(
         "spresense_m1_gcs_build=PASS "
-        f"project_commit={project_commit} tree={'dirty' if dirty else 'clean'} "
+        f"profile={profile} project_commit={project_commit} "
+        f"tree={'dirty' if dirty else 'clean'} "
         f"gcc={gcc_version} artifact_dir={artifact_dir}"
     )
     return 0

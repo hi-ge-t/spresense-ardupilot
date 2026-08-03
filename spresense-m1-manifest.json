@@ -12,13 +12,23 @@
   "target": {
     "board": "Sony Spresense CXD5602",
     "os": "Sony Spresense SDK NuttX",
-    "profile": "spresense-m1-gcs"
+    "profile": "spresense-m1-pwbimu-gnss-gcs",
+    "legacy_profile": "spresense-m1-gcs"
   },
   "gnss": {
     "builtin": "disabled",
     "addon": "required",
     "device": "/dev/gps2",
     "ram": "required"
+  },
+  "pwbimu": {
+    "addon": "required",
+    "device": "/dev/imu0",
+    "startup_probe": "one-bounded-sample",
+    "bus": "SPI5",
+    "pinshare": "eMMC",
+    "link_guard": "required",
+    "runtime_fallback": "disabled"
   },
   "safety": {
     "arming": "guard-always-reject",
@@ -31,7 +41,7 @@
     "baud": 115200,
     "mavlink": "ArduPilot pinned ardupilotmega v2",
     "heartbeat": "MAV_AUTOPILOT_ARDUPILOTMEGA",
-    "parameter_surface": "fixed-read-only-diagnostic",
+    "parameter_surface": "read-only-diagnostic",
     "arm_command": "always-denied",
     "full_copter": false
   },
@@ -39,7 +49,8 @@
     "development": "microSD",
     "development_path": "/mnt/sd0/APM/ardupilot.stg",
     "final_candidate": "eMMC",
-    "automatic_fallback": "disabled"
+    "automatic_fallback": "disabled",
+    "pwbimu_emmc_coexistence": "hardware-design-HOLD"
   },
   "distribution": {
     "license": "GPL-3.0-or-later",
@@ -57,7 +68,9 @@
     "qgroundcontrol_runtime": "confirmed-single-bench-run-2026-08-01",
     "spresense_boot": "confirmed-single-bench-run-2026-08-01",
     "runtime_record": "docs/evidence/SPRESENSE_M1_GCS_20260801.md",
-    "sensor_read": "HOLD",
+    "pwbimu_runtime": "HOLD",
+    "gnss_runtime": "HOLD",
+    "combined_addon_runtime": "HOLD",
     "flight": "out-of-scope"
   }
 }

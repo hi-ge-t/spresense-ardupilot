@@ -53,6 +53,11 @@ def main() -> int:
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--verify-arm-denied", action="store_true")
+    parser.add_argument(
+        "--require-pwbimu",
+        action="store_true",
+        help="require the Multi-IMU profile and a successful startup probe",
+    )
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
     sys.path.insert(0, str(root / "modules/mavlink"))
@@ -112,7 +117,8 @@ def main() -> int:
             5.0,
         )
         custom_version = bytes(version.flight_custom_version)
-        if custom_version != b"M1GCS001":
+        expected_version = b"M1PIM001" if args.require_pwbimu else b"M1GCS001"
+        if custom_version != expected_version:
             raise CheckError(
                 f"runtime identity mismatch: {custom_version!r}"
             )
@@ -120,9 +126,21 @@ def main() -> int:
             raise CheckError("unexpected ArduPilot major version")
 
         link.mav.param_request_list_send(target_system, target_component)
+        expected_parameters = {
+            "M1_OUT_EN": 0.0,
+            "M1_GNSS_REQ": 1.0,
+            "M1_GNSS_RAM": 1.0,
+            "M1_STAGE": 1.0,
+        }
+        if args.require_pwbimu:
+            expected_parameters.update({
+                "M1_IMU_REQ": 1.0,
+                "M1_IMU_OK": 1.0,
+            })
         parameters = {}
         deadline = time.monotonic() + 5.0
-        while time.monotonic() < deadline and len(parameters) < 4:
+        while (time.monotonic() < deadline and
+               len(parameters) < len(expected_parameters)):
             value = link.recv_match(
                 type="PARAM_VALUE", blocking=True, timeout=0.5
             )
@@ -132,14 +150,13 @@ def main() -> int:
             if isinstance(parameter_id, bytes):
                 parameter_id = parameter_id.decode("ascii").rstrip("\x00")
             parameters[str(parameter_id)] = float(value.param_value)
-        expected_parameters = {
-            "M1_OUT_EN": 0.0,
-            "M1_GNSS_REQ": 1.0,
-            "M1_GNSS_RAM": 1.0,
-            "M1_STAGE": 1.0,
-        }
         if parameters != expected_parameters:
             raise CheckError(f"parameter contract mismatch: {parameters}")
+        if (args.require_pwbimu and heartbeat.system_status !=
+                mavutil.mavlink.MAV_STATE_STANDBY):
+            raise CheckError(
+                f"Multi-IMU probe not ready: system_status={heartbeat.system_status}"
+            )
 
         arm_result = "not-requested"
         if args.verify_arm_denied:
@@ -189,10 +206,15 @@ def main() -> int:
             "autopilot": "ARDUPILOTMEGA",
             "vehicle_type": "QUADROTOR",
             "runtime_identity": custom_version.decode("ascii"),
+            "profile": (
+                "spresense-m1-pwbimu-gnss-gcs" if args.require_pwbimu
+                else "spresense-m1-gcs"
+            ),
             "parameters": parameters,
             "arm_request": arm_result,
             "armed_observed": False,
             "physical_outputs_verified": False,
+            "pwbimu_runtime_verified": args.require_pwbimu,
             "gnss_runtime_verified": False,
             "flight_verified": False,
         }
@@ -209,7 +231,9 @@ def main() -> int:
 
     print(
         "spresense_m1_gcs_serial=PASS "
-        "heartbeat=ARDUPILOTMEGA version=M1GCS001 params=4 "
+        f"heartbeat=ARDUPILOTMEGA version={expected_version.decode('ascii')} "
+        f"params={len(expected_parameters)} "
+        f"pwbimu={'PASS' if args.require_pwbimu else 'not-required'} "
         f"arm={arm_result}"
     )
     return 0

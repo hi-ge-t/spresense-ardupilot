@@ -13,28 +13,40 @@ EXPECTED = {
     "upstream.commit": "1511f27194f1dcc3728270883047bdf022b3fd53",
     "sdk.commit": "7fd61b2c03f06a4ff0302b84c755e58c338788b2",
     "target.os": "Sony Spresense SDK NuttX",
-    "target.profile": "spresense-m1-gcs",
+    "target.profile": "spresense-m1-pwbimu-gnss-gcs",
+    "target.legacy_profile": "spresense-m1-gcs",
     "gnss.builtin": "disabled",
     "gnss.addon": "required",
     "gnss.device": "/dev/gps2",
     "gnss.ram": "required",
+    "pwbimu.addon": "required",
+    "pwbimu.device": "/dev/imu0",
+    "pwbimu.startup_probe": "one-bounded-sample",
+    "pwbimu.bus": "SPI5",
+    "pwbimu.pinshare": "eMMC",
+    "pwbimu.link_guard": "required",
+    "pwbimu.runtime_fallback": "disabled",
     "safety.arming": "guard-always-reject",
     "safety.actuator_driver": "absent",
     "safety.outputs": "disabled",
     "gcs.transport": "/dev/ttyS0",
     "gcs.baud": 115200,
     "gcs.heartbeat": "MAV_AUTOPILOT_ARDUPILOTMEGA",
-    "gcs.parameter_surface": "fixed-read-only-diagnostic",
+    "gcs.parameter_surface": "read-only-diagnostic",
     "gcs.arm_command": "always-denied",
     "gcs.full_copter": False,
     "storage.development": "microSD",
     "storage.final_candidate": "eMMC",
     "storage.automatic_fallback": "disabled",
+    "storage.pwbimu_emmc_coexistence": "hardware-design-HOLD",
     "distribution.binary": "disabled",
     "evidence.sony_object_compile": "required",
     "evidence.sony_gcs_firmware_link": "required",
     "evidence.linker_map_guard": "required",
     "evidence.sony_copter_link": "HOLD",
+    "evidence.pwbimu_runtime": "HOLD",
+    "evidence.gnss_runtime": "HOLD",
+    "evidence.combined_addon_runtime": "HOLD",
 }
 
 
@@ -89,20 +101,68 @@ def main() -> int:
             failures.append(f"gcs-safety-token-missing={token}")
 
     profile = (
-        gcs_root / "configs/gcs/defconfig"
+        gcs_root / "configs/pwbimu_gnss_gcs/defconfig"
     ).read_text(encoding="utf-8")
     for required in (
+        "+SPRESENSE_M1_PWBIMU_REQUIRED=y",
+        "+SPRESENSE_M1_PWBIMU_DEVICE=\"/dev/imu0\"",
         "+CXD56_GNSS_ADDON=y",
         "+SENSORS_CXD5610_GNSS=y",
+        "+SENSORS_CXD5602PWBIMU=y",
+        "+CXD56_CXD5602PWBIMU_SPI5_DMAC=y",
+        "+CXD56_SPI5_PINMAP_EMMC=y",
         "+CXD56_GNSS_RAM=y",
         "+CXD56_GNSS_HEAP=y",
         "-CXD56_GNSS=y",
+        "-CXD56_EMMC=y",
         "-CXD56_PWM=y",
         "-PWM=y",
         "-SYSTEM_NSH=y",
     ):
         if required not in profile.splitlines():
             failures.append(f"gcs-profile-token-missing={required}")
+
+    legacy_profile = (
+        gcs_root / "configs/gcs/defconfig"
+    ).read_text(encoding="utf-8")
+    for required in (
+        "+CXD56_GNSS_ADDON=y",
+        "-CXD56_GNSS=y",
+        "-CXD56_PWM=y",
+        "-PWM=y",
+    ):
+        if required not in legacy_profile.splitlines():
+            failures.append(f"legacy-profile-token-missing={required}")
+
+    probe_source = (
+        gcs_root / "m1_pwbimu_probe.c"
+    ).read_text(encoding="utf-8")
+    for required in (
+        "CONFIG_SPRESENSE_M1_PWBIMU_DEVICE",
+        "O_RDONLY",
+        "SNIOC_ENABLE",
+        "POLLIN",
+    ):
+        if required not in probe_source:
+            failures.append(f"pwbimu-probe-token-missing={required}")
+    for forbidden in ("/dev/pwm", "/dev/dshot", "/dev/can"):
+        if forbidden in probe_source.lower():
+            failures.append(f"pwbimu-probe-output-path={forbidden}")
+
+    flash_guard = (
+        root / "Tools/flash_spresense.sh"
+    ).read_text(encoding="utf-8")
+    for required in (
+        "spresense-m1-pwbimu-gnss-gcs",
+        "m1.pwbimu.addon=required",
+        "m1.pwbimu.device=/dev/imu0",
+        "m1.pwbimu.bus=SPI5",
+        "m1.pwbimu.pinshare=eMMC",
+        "m1.pwbimu.link_guard=required",
+        "m1.sensor_fallback=disabled",
+    ):
+        if required not in flash_guard:
+            failures.append(f"flash-guard-token-missing={required}")
 
     if failures:
         print("spresense_m1_contract=FAIL " + " ".join(failures), file=sys.stderr)

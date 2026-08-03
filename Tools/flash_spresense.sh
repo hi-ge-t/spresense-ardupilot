@@ -14,8 +14,8 @@ fi
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 PORT=$1
 MODE=${2:---preflight}
-ARTIFACT_DIR=${SPFC_ARTIFACT_DIR:-"${ROOT_DIR}/build/spresense-m1-gcs-artifacts"}
-PROFILE=${SPFC_PROFILE:-spresense-m1-gcs}
+ARTIFACT_DIR=${SPFC_ARTIFACT_DIR:-"${ROOT_DIR}/build/spresense-m1-pwbimu-gnss-gcs-artifacts"}
+PROFILE=${SPFC_PROFILE:-spresense-m1-pwbimu-gnss-gcs}
 MANIFEST="${ARTIFACT_DIR}/ARTIFACTS.manifest"
 IMAGE="${ARTIFACT_DIR}/nuttx.spk"
 WRITER="${ROOT_DIR}/modules/Spresense/sdk/tools/flash_writer/scripts/flash_writer.py"
@@ -56,6 +56,24 @@ for contract in \
     exit 1
   fi
 done
+
+if [[ ${PROFILE} == spresense-m1-pwbimu-gnss-gcs ]]; then
+  for contract in \
+    'm1.pwbimu.addon=required' \
+    'm1.pwbimu.device=/dev/imu0' \
+    'm1.pwbimu.probe=one-bounded-sample' \
+    'm1.pwbimu.bus=SPI5' \
+    'm1.pwbimu.pinshare=eMMC' \
+    'm1.pwbimu.link_guard=required' \
+    'm1.sensor_fallback=disabled'; do
+    key=${contract%%=*}
+    expected=${contract#*=}
+    if [[ $(manifest_value "${key}") != "${expected}" ]]; then
+      echo "Artifact Multi-IMU contract mismatch: ${contract}" >&2
+      exit 1
+    fi
+  done
+fi
 
 for artifact in nuttx.spk nuttx nuttx.map nuttx.config memory-layout.json; do
   path="${ARTIFACT_DIR}/${artifact}"
