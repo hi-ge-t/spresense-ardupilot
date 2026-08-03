@@ -392,6 +392,7 @@ bool Copter::should_log(uint32_t mask)
  */
 void Copter::allocate_motors(void)
 {
+    spresense_init_marker("SPRESENSE_M1_MOTORS=START\n");
     switch ((AP_Motors::motor_frame_class)g2.frame_class.get()) {
 #if FRAME_CONFIG != HELI_FRAME
         case AP_Motors::MOTOR_FRAME_QUAD:
@@ -461,12 +462,15 @@ void Copter::allocate_motors(void)
     if (motors == nullptr) {
         AP_BoardConfig::allocation_error("FRAME_CLASS=%u", (unsigned)g2.frame_class.get());
     }
+    spresense_init_marker("SPRESENSE_M1_MOTORS=MOTORS_NEW_AFTER\n");
     AP_Param::load_object_from_eeprom(motors, motors_var_info);
+    spresense_init_marker("SPRESENSE_M1_MOTORS=MOTORS_PARAMS_AFTER\n");
 
     ahrs_view = ahrs.create_view(ROTATION_NONE);
     if (ahrs_view == nullptr) {
         AP_BoardConfig::allocation_error("AP_AHRS_View");
     }
+    spresense_init_marker("SPRESENSE_M1_MOTORS=AHRS_VIEW_AFTER\n");
 
 #if FRAME_CONFIG != HELI_FRAME
     if ((AP_Motors::motor_frame_class)g2.frame_class.get() == AP_Motors::MOTOR_FRAME_6DOF_SCRIPTING) {
@@ -485,13 +489,17 @@ void Copter::allocate_motors(void)
     if (attitude_control == nullptr) {
         AP_BoardConfig::allocation_error("AttitudeControl");
     }
+    spresense_init_marker("SPRESENSE_M1_MOTORS=ATTITUDE_NEW_AFTER\n");
     AP_Param::load_object_from_eeprom(attitude_control, attitude_control_var_info);
+    spresense_init_marker("SPRESENSE_M1_MOTORS=ATTITUDE_PARAMS_AFTER\n");
         
     pos_control = NEW_NOTHROW AC_PosControl(*ahrs_view, *motors, *attitude_control);
     if (pos_control == nullptr) {
         AP_BoardConfig::allocation_error("PosControl");
     }
+    spresense_init_marker("SPRESENSE_M1_MOTORS=POS_NEW_AFTER\n");
     AP_Param::load_object_from_eeprom(pos_control, pos_control->var_info);
+    spresense_init_marker("SPRESENSE_M1_MOTORS=POS_PARAMS_AFTER\n");
 
 #if AP_OAPATHPLANNER_ENABLED
     wp_nav = NEW_NOTHROW AC_WPNav_OA(*ahrs_view, *pos_control, *attitude_control);
@@ -501,13 +509,17 @@ void Copter::allocate_motors(void)
     if (wp_nav == nullptr) {
         AP_BoardConfig::allocation_error("WPNav");
     }
+    spresense_init_marker("SPRESENSE_M1_MOTORS=WPNAV_NEW_AFTER\n");
     AP_Param::load_object_from_eeprom(wp_nav, wp_nav->var_info);
+    spresense_init_marker("SPRESENSE_M1_MOTORS=WPNAV_PARAMS_AFTER\n");
 
     loiter_nav = NEW_NOTHROW AC_Loiter(*ahrs_view, *pos_control, *attitude_control);
     if (loiter_nav == nullptr) {
         AP_BoardConfig::allocation_error("LoiterNav");
     }
+    spresense_init_marker("SPRESENSE_M1_MOTORS=LOITER_NEW_AFTER\n");
     AP_Param::load_object_from_eeprom(loiter_nav, loiter_nav->var_info);
+    spresense_init_marker("SPRESENSE_M1_MOTORS=LOITER_PARAMS_AFTER\n");
 
 #if MODE_CIRCLE_ENABLED
     circle_nav = NEW_NOTHROW AC_Circle(*ahrs_view, *pos_control);
@@ -519,6 +531,7 @@ void Copter::allocate_motors(void)
 
     // reload lines from the defaults file that may now be accessible
     AP_Param::reload_defaults_file(true);
+    spresense_init_marker("SPRESENSE_M1_MOTORS=DEFAULTS_AFTER\n");
     
     // now setup some frame-class specific defaults
     switch ((AP_Motors::motor_frame_class)g2.frame_class.get()) {
@@ -571,6 +584,7 @@ void Copter::allocate_motors(void)
 
     // param count could have changed
     AP_Param::invalidate_count();
+    spresense_init_marker("SPRESENSE_M1_MOTORS=DONE\n");
 }
 
 bool Copter::is_tradheli() const
