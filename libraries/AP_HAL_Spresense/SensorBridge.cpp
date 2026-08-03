@@ -1,5 +1,9 @@
 #include "SensorBridge.h"
 
+#if defined(__NuttX__)
+#include <nuttx/config.h>
+#endif
+
 #include <math.h>
 
 namespace {
@@ -140,8 +144,6 @@ bool Spresense::convert_imu_sample(const ImuRawSample &raw,
 
 #if defined(__NuttX__)
 
-#include <nuttx/config.h>
-
 #include <arch/chip/gnss.h>
 #include <nuttx/sensors/cxd5602pwbimu.h>
 
@@ -150,9 +152,7 @@ bool Spresense::convert_imu_sample(const ImuRawSample &raw,
 #include <poll.h>
 #include <pthread.h>
 #include <sched.h>
-#include <stdio.h>
 #include <stdint.h>
-#include <string.h>
 #include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
@@ -168,17 +168,15 @@ pthread_mutex_t gnss_sample_mutex = PTHREAD_MUTEX_INITIALIZER;
 Spresense::GnssSample gnss_latest_sample {};
 uint32_t gnss_sample_sequence;
 uint32_t gnss_consumed_sequence;
-bool gnss_attach_reported;
-bool gnss_read_reported;
-bool gnss_consumed_reported;
-bool gnss_main_priority_reported;
-
 constexpr uint8_t GNSS_INIT_IDLE = 0U;
 constexpr uint8_t GNSS_INIT_STARTING = 1U;
 constexpr uint8_t GNSS_INIT_READY = 2U;
 constexpr uint8_t GNSS_INIT_FAILED = 3U;
 constexpr int GNSS_INIT_PRIORITY = 110;
-constexpr size_t GNSS_INIT_STACK_BYTES = 4096U;
+// The reader keeps Sony's 1328-byte PVT structure on its stack and enters
+// driver/libc calls below it.  Match the other Spresense worker stacks rather
+// than relying on the NuttX minimum with too little diagnostic margin.
+constexpr size_t GNSS_INIT_STACK_BYTES = 8192U;
 
 int checked_ioctl(int fd, int request, unsigned long argument)
 {
@@ -206,41 +204,9 @@ void close_device(int &fd)
     }
 }
 
-void gnss_init_marker(const char *marker)
-{
-    (void)write(STDOUT_FILENO, marker, strlen(marker));
-}
-
-void gnss_priority_marker(const char *role)
-{
-    struct sched_param scheduling {};
-    char marker[64] {};
-    if (sched_getparam(0, &scheduling) != 0) {
-        return;
-    }
-    const int length = snprintf(marker, sizeof(marker),
-                                "SPRESENSE_M1_GNSS=%s_PRIORITY_%d\n",
-                                role, scheduling.sched_priority);
-    if (length > 0 && length < static_cast<int>(sizeof(marker))) {
-        (void)write(STDOUT_FILENO, marker, static_cast<size_t>(length));
-    }
-}
-
-void gnss_lock_marker(const char *role)
-{
-    char marker[64] {};
-    const int length = snprintf(marker, sizeof(marker),
-                                "SPRESENSE_M1_GNSS=%s_LOCK_%d\n",
-                                role, sched_lockcount());
-    if (length > 0 && length < static_cast<int>(sizeof(marker))) {
-        (void)write(STDOUT_FILENO, marker, static_cast<size_t>(length));
-    }
-}
-
-void gnss_init_fail(int &fd, const char *marker)
+void gnss_init_fail(int &fd)
 {
     close_device(fd);
-    gnss_init_marker(marker);
     __atomic_store_n(&gnss_init_state, GNSS_INIT_FAILED, __ATOMIC_RELEASE);
 }
 
@@ -305,7 +271,6 @@ bool publish_gnss_sample(const struct cxd56_gnss_positiondata2_s &position)
 
 void run_gnss_reader()
 {
-    bool sample_reported = false;
     for (;;) {
         if (!ready_to_read(gnss_fd, GNSS_READER_POLL_TIMEOUT_MS)) {
             continue;
@@ -318,13 +283,8 @@ void run_gnss_reader()
         } while (length < 0 && errno == EINTR);
         if (length != static_cast<ssize_t>(sizeof(position)) ||
             !publish_gnss_sample(position)) {
-            gnss_init_fail(gnss_fd, "SPRESENSE_M1_GNSS=STREAM_FAIL\n");
+            gnss_init_fail(gnss_fd);
             return;
-        }
-        if (!sample_reported) {
-            sample_reported = true;
-            gnss_init_marker("SPRESENSE_M1_GNSS=SAMPLE\n");
-            gnss_lock_marker("SAMPLE");
         }
 
         // The CXD5610 poll notification is level-like on this SDK.  Block
@@ -338,42 +298,33 @@ void run_gnss_reader()
 
 void *gnss_init_thread(void *)
 {
-    gnss_init_marker("SPRESENSE_M1_GNSS=THREAD\n");
-    gnss_priority_marker("INIT");
-    gnss_lock_marker("INIT");
     int fd = open(CONFIG_SPRESENSE_M1_COPTER_GNSS_DEVICE,
                   O_RDONLY | O_NONBLOCK);
     if (fd < 0) {
-        gnss_init_fail(fd, "SPRESENSE_M1_GNSS=OPEN_FAIL\n");
+        gnss_init_fail(fd);
         return nullptr;
     }
-    gnss_init_marker("SPRESENSE_M1_GNSS=OPEN\n");
 
     char version[CXD56_GNSS_VERSION_MAXLEN] {};
     if (checked_ioctl(fd, CXD56_GNSS_IOCTL_WAKEUP, 0U) != 0) {
-        gnss_init_fail(fd, "SPRESENSE_M1_GNSS=WAKE_FAIL\n");
+        gnss_init_fail(fd);
         return nullptr;
     }
-    gnss_init_marker("SPRESENSE_M1_GNSS=WAKE\n");
     if (checked_ioctl(fd, CXD56_GNSS_IOCTL_GET_VERSION,
                       reinterpret_cast<unsigned long>(version)) != 0 ||
         version[0] == '\0') {
-        gnss_init_fail(fd, "SPRESENSE_M1_GNSS=VERSION_FAIL\n");
+        gnss_init_fail(fd);
         return nullptr;
     }
-    gnss_init_marker("SPRESENSE_M1_GNSS=VERSION\n");
     if (checked_ioctl(fd, CXD56_GNSS_IOCTL_START,
                       CXD56_GNSS_STMOD_HOT) != 0) {
-        gnss_init_fail(fd, "SPRESENSE_M1_GNSS=START_FAIL\n");
+        gnss_init_fail(fd);
         return nullptr;
     }
-    gnss_init_marker("SPRESENSE_M1_GNSS=START\n");
-    gnss_lock_marker("START");
 
     gnss_fd = fd;
     gnss_have_timestamp = false;
     __atomic_store_n(&gnss_init_state, GNSS_INIT_READY, __ATOMIC_RELEASE);
-    gnss_init_marker("SPRESENSE_M1_GNSS=READY\n");
     run_gnss_reader();
     return nullptr;
 }
@@ -396,15 +347,12 @@ bool start_gnss_init_thread()
         pthread_attr_setschedparam(&attributes, &scheduling) == 0 &&
         pthread_attr_setinheritsched(&attributes, PTHREAD_EXPLICIT_SCHED) == 0;
     pthread_t thread {};
-    gnss_init_marker("SPRESENSE_M1_GNSS=CREATE\n");
     const int result = configured
         ? pthread_create(&thread, &attributes, gnss_init_thread, nullptr)
         : -1;
-    gnss_init_marker("SPRESENSE_M1_GNSS=CREATED\n");
     (void)pthread_attr_destroy(&attributes);
     if (result == 0) {
         (void)pthread_setname_np(thread, "ap-gnss-init");
-        gnss_init_marker("SPRESENSE_M1_GNSS=NAMED\n");
     }
     return result == 0;
 }
@@ -421,17 +369,9 @@ bool Spresense::gnss_start()
     // Sony's start ioctls synchronously wait for responses produced by the
     // CXD5610 receive task.  Run that bounded handshake away from Copter's
     // main loop so a missing or failed Add-on cannot stop GCS and INS work.
-    if (!gnss_main_priority_reported) {
-        gnss_main_priority_reported = true;
-        gnss_priority_marker("MAIN");
-    }
     const uint8_t state = __atomic_load_n(
         &gnss_init_state, __ATOMIC_ACQUIRE);
     if (state == GNSS_INIT_READY) {
-        if (!gnss_attach_reported) {
-            gnss_attach_reported = true;
-            gnss_init_marker("SPRESENSE_M1_GNSS=ATTACH\n");
-        }
         return gnss_fd >= 0;
     }
     if (state == GNSS_INIT_STARTING || state == GNSS_INIT_FAILED) {
@@ -445,12 +385,10 @@ bool Spresense::gnss_start()
         return expected == GNSS_INIT_READY && gnss_fd >= 0;
     }
     if (!start_gnss_init_thread()) {
-        gnss_init_marker("SPRESENSE_M1_GNSS=THREAD_FAIL\n");
         __atomic_store_n(
             &gnss_init_state, GNSS_INIT_FAILED, __ATOMIC_RELEASE);
         return false;
     }
-    gnss_lock_marker("MAIN_RETURN");
     return false;
 }
 
@@ -461,10 +399,6 @@ Spresense::SensorReadStatus Spresense::gnss_read(GnssSample &sample)
     // missing notification or stalled driver cannot stop its main loop.
     const uint8_t state = __atomic_load_n(
         &gnss_init_state, __ATOMIC_ACQUIRE);
-    if (!gnss_read_reported) {
-        gnss_read_reported = true;
-        gnss_init_marker("SPRESENSE_M1_GNSS=READ\n");
-    }
     if (state == GNSS_INIT_FAILED) {
         return SensorReadStatus::ERROR;
     }
@@ -480,10 +414,6 @@ Spresense::SensorReadStatus Spresense::gnss_read(GnssSample &sample)
     gnss_consumed_sequence = gnss_sample_sequence;
     if (pthread_mutex_unlock(&gnss_sample_mutex) != 0) {
         return SensorReadStatus::ERROR;
-    }
-    if (!gnss_consumed_reported) {
-        gnss_consumed_reported = true;
-        gnss_init_marker("SPRESENSE_M1_GNSS=CONSUMED\n");
     }
     return SensorReadStatus::SAMPLE;
 }
