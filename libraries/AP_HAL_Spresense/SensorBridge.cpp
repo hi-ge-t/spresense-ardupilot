@@ -216,7 +216,7 @@ bool block_gnss_notification()
 {
     sigset_t mask {};
     return gnss_notification_mask(mask) &&
-           sigprocmask(SIG_BLOCK, &mask, nullptr) == 0;
+           pthread_sigmask(SIG_BLOCK, &mask, nullptr) == 0;
 }
 
 bool configure_gnss_notification(int fd, bool enable)
@@ -479,7 +479,13 @@ bool start_gnss_init_thread()
 
 bool Spresense::sensor_bridge_platform_ready()
 {
-    return true;
+    // The CXD5610 driver records getpid() when SIGNAL_SET is issued, so its
+    // notification targets this pthread group rather than the reader pthread
+    // alone.  Block the signal before Scheduler::init() creates child threads;
+    // they inherit the mask and the GNSS reader becomes the sole consumer via
+    // sigtimedwait().  Otherwise notifications repeatedly interrupt Copter's
+    // sub-tick nanosleep and prevent wait_for_sample() from progressing.
+    return block_gnss_notification();
 }
 
 bool Spresense::gnss_start()

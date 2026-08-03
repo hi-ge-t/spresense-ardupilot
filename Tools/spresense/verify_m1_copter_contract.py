@@ -186,6 +186,8 @@ def main() -> int:
             "GNSS_READER_YIELD_US = 1000U",
             "CXD56_GNSS_IOCTL_SIGNAL_SET",
             "nanosleep(&yield_time, &yield_time)",
+            "pthread_sigmask(SIG_BLOCK, &mask, nullptr)",
+            "return block_gnss_notification();",
             "sigtimedwait",
             "pthread_mutex_trylock(&gnss_sample_mutex)",
             "PWBIMU_STARTUP_POLL_TIMEOUT_MS",
