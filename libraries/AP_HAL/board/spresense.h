@@ -20,6 +20,11 @@
 #define HAL_WITH_DSP 0
 #define HAL_WITH_EKF_DOUBLE 0
 
+// M1 is an output-disabled integration target, not a flight-rate target.
+// Leave CPU headroom for the full Copter scheduler, GCS, GNSS and PWBIMU
+// paths; loop-rate and latency remain hardware HOLD items.
+#define SCHEDULER_DEFAULT_LOOP_RATE 100
+
 // M1 only integrates the CXD5610 GNSS and CXD5602PWBIMU frontends.  Keep
 // Copter setup running long enough to exercise those real backends without
 // inventing a barometer or claiming flight readiness.  Arming and every

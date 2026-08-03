@@ -19,6 +19,7 @@ EXPECTED = {
     "target.entrypoint": "arducopter_spresense_main",
     "copter.full_vehicle_archive": True,
     "copter.scheduler": "nuttx-pthread",
+    "copter.loop_rate_default_hz": 100,
     "copter.sensor_hal_integration": "GNSS+INS",
     "copter.runtime": "hardware-HOLD",
     "copter.flight_ready": False,
@@ -97,12 +98,26 @@ def main() -> int:
             "#define HAL_NUM_CAN_IFACES 0",
             "#define HAL_INS_DEFAULT HAL_INS_SPRESENSE",
             "#define HAL_GPS1_TYPE_DEFAULT 27",
+            "#define SCHEDULER_DEFAULT_LOOP_RATE 100",
             "#define AP_BARO_BACKEND_DEFAULT_ENABLED 0",
             "#define AP_BARO_PROBE_EXTERNAL_I2C_BUSES 0",
             "#define HAL_BARO_ALLOW_INIT_NO_BARO 1",
             "#define HAL_SPRESENSE_OUTPUT_DISABLED 1",
             "#define AP_NETWORKING_ENABLED 0",
             "#define HAL_LOGGING_FILESYSTEM_ENABLED 0",
+        ),
+    )
+
+    scheduler = (root / "libraries/AP_Scheduler/AP_Scheduler.cpp").read_text(
+        encoding="utf-8"
+    )
+    require_tokens(
+        failures,
+        "scheduler",
+        scheduler,
+        (
+            "#ifndef SCHEDULER_DEFAULT_LOOP_RATE",
+            "#define SCHEDULER_DEFAULT_LOOP_RATE 400",
         ),
     )
 
@@ -186,9 +201,23 @@ def main() -> int:
         gps_backend,
         (
             "Spresense::gnss_read",
+            "if (!Spresense::gnss_start())",
             "state.location.lat",
             "state.velocity",
             "return false;",
+        ),
+    )
+    gps_detection = (root / "libraries/AP_GPS/AP_GPS.cpp").read_text(
+        encoding="utf-8"
+    )
+    require_tokens(
+        failures,
+        "gps-detection",
+        gps_detection,
+        (
+            "case GPS_TYPE_SPRESENSE:",
+            "(void)Spresense::gnss_start();",
+            "return NEW_NOTHROW AP_GPS_Spresense(",
         ),
     )
     ins_backend = (

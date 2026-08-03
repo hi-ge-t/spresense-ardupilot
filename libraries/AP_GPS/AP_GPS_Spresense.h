@@ -16,7 +16,7 @@ public:
     const char *name() const override { return "Spresense CXD5610"; }
 
 private:
-    bool _healthy = true;
+    bool _healthy = false;
 };
 
 #endif // AP_GPS_SPRESENSE_ENABLED

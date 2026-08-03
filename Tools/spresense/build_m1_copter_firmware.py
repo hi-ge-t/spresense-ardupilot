@@ -382,6 +382,7 @@ def main() -> int:
             "m1.copter.full": "true",
             "m1.copter.entry": "arducopter_spresense_main",
             "m1.copter.scheduler": "nuttx-pthread",
+            "m1.copter.loop_rate_default_hz": "100",
             "m1.gcs.transport": "/dev/ttyS0@115200",
             "m1.gnss.builtin": "disabled",
             "m1.gnss.addon": "required",

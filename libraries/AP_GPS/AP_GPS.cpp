@@ -658,7 +658,12 @@ AP_GPS_Backend *AP_GPS::_detect_instance(const uint8_t instance)
     switch (GPS_Type(type)) {
 #if AP_GPS_SPRESENSE_ENABLED
     case GPS_TYPE_SPRESENSE:
-        if (instance == 0U && Spresense::gnss_start()) {
+        if (instance == 0U) {
+            // CXD5610 startup is asynchronous so its blocking Sony ioctls
+            // cannot stop the Copter main loop. Attach the backend now and
+            // let read() observe readiness instead of depending on a later
+            // generic GPS re-detection pass.
+            (void)Spresense::gnss_start();
             dstate->auto_detected_baud = false;
             return NEW_NOTHROW AP_GPS_Spresense(
                 *this, params[instance], state[instance], nullptr);

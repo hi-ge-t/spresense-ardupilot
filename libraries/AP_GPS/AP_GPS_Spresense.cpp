@@ -9,6 +9,11 @@
 
 bool AP_GPS_Spresense::read()
 {
+    if (!Spresense::gnss_start()) {
+        _healthy = false;
+        return false;
+    }
+
     Spresense::GnssSample sample {};
     const auto result = Spresense::gnss_read(sample);
     if (result == Spresense::SensorReadStatus::NO_DATA) {
