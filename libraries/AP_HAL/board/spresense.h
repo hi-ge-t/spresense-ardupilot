@@ -20,6 +20,14 @@
 #define HAL_WITH_DSP 0
 #define HAL_WITH_EKF_DOUBLE 0
 
+// M1 only integrates the CXD5610 GNSS and CXD5602PWBIMU frontends.  Keep
+// Copter setup running long enough to exercise those real backends without
+// inventing a barometer or claiming flight readiness.  Arming and every
+// physical output remain compile-time disabled below.
+#define AP_BARO_BACKEND_DEFAULT_ENABLED 0
+#define AP_BARO_PROBE_EXTERNAL_I2C_BUSES 0
+#define HAL_BARO_ALLOW_INIT_NO_BARO 1
+
 // This bring-up target must remain impossible to arm until a later,
 // separately reviewed physical-output gate explicitly removes this contract.
 #define HAL_SPRESENSE_OUTPUT_DISABLED 1
