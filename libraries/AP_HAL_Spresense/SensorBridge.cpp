@@ -149,6 +149,7 @@ bool Spresense::convert_imu_sample(const ImuRawSample &raw,
 
 #include <errno.h>
 #include <fcntl.h>
+#include <new>
 #include <poll.h>
 #include <pthread.h>
 #include <sched.h>
@@ -173,10 +174,10 @@ constexpr uint8_t GNSS_INIT_STARTING = 1U;
 constexpr uint8_t GNSS_INIT_READY = 2U;
 constexpr uint8_t GNSS_INIT_FAILED = 3U;
 constexpr int GNSS_INIT_PRIORITY = 110;
-// The reader keeps Sony's 1328-byte PVT structure on its stack and enters
-// driver/libc calls below it.  Match the other Spresense worker stacks rather
-// than relying on the NuttX minimum with too little diagnostic margin.
-constexpr size_t GNSS_INIT_STACK_BYTES = 8192U;
+// The handshake and PVT conversion enter several Sony driver/libc layers.
+// Keep a conservative margin; the 1328-byte PVT buffer itself is allocated
+// from the complete GNSS-RAM heap below rather than consuming this stack.
+constexpr size_t GNSS_INIT_STACK_BYTES = 16384U;
 
 int checked_ioctl(int fd, int request, unsigned long argument)
 {
@@ -269,14 +270,14 @@ bool publish_gnss_sample(const struct cxd56_gnss_positiondata2_s &position)
     return true;
 }
 
-void run_gnss_reader()
+void run_gnss_reader(struct cxd56_gnss_positiondata2_s &position)
 {
     for (;;) {
         if (!ready_to_read(gnss_fd, GNSS_READER_POLL_TIMEOUT_MS)) {
             continue;
         }
 
-        struct cxd56_gnss_positiondata2_s position {};
+        position = {};
         ssize_t length;
         do {
             length = read(gnss_fd, &position, sizeof(position));
@@ -322,10 +323,16 @@ void *gnss_init_thread(void *)
         return nullptr;
     }
 
+    auto *position = new (std::nothrow) cxd56_gnss_positiondata2_s {};
+    if (position == nullptr) {
+        gnss_init_fail(fd);
+        return nullptr;
+    }
     gnss_fd = fd;
     gnss_have_timestamp = false;
     __atomic_store_n(&gnss_init_state, GNSS_INIT_READY, __ATOMIC_RELEASE);
-    run_gnss_reader();
+    run_gnss_reader(*position);
+    delete position;
     return nullptr;
 }
 
