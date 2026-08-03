@@ -147,6 +147,8 @@ bool Spresense::convert_imu_sample(const ImuRawSample &raw,
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <pthread.h>
+#include <sched.h>
 #include <stdint.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -158,6 +160,14 @@ int gnss_fd = -1;
 int pwbimu_fd = -1;
 bool gnss_have_timestamp;
 uint64_t gnss_last_timestamp;
+uint8_t gnss_init_state;
+
+constexpr uint8_t GNSS_INIT_IDLE = 0U;
+constexpr uint8_t GNSS_INIT_STARTING = 1U;
+constexpr uint8_t GNSS_INIT_READY = 2U;
+constexpr uint8_t GNSS_INIT_FAILED = 3U;
+constexpr int GNSS_INIT_PRIORITY = 110;
+constexpr size_t GNSS_INIT_STACK_BYTES = 4096U;
 
 int checked_ioctl(int fd, int request, unsigned long argument)
 {
@@ -185,6 +195,66 @@ void close_device(int &fd)
     }
 }
 
+void gnss_init_fail(int &fd)
+{
+    close_device(fd);
+    __atomic_store_n(&gnss_init_state, GNSS_INIT_FAILED, __ATOMIC_RELEASE);
+}
+
+void *gnss_init_thread(void *)
+{
+    int fd = open(CONFIG_SPRESENSE_M1_COPTER_GNSS_DEVICE,
+                  O_RDONLY | O_NONBLOCK);
+    if (fd < 0) {
+        gnss_init_fail(fd);
+        return nullptr;
+    }
+
+    char version[CXD56_GNSS_VERSION_MAXLEN] {};
+    if (checked_ioctl(fd, CXD56_GNSS_IOCTL_WAKEUP, 0U) != 0 ||
+        checked_ioctl(fd, CXD56_GNSS_IOCTL_GET_VERSION,
+                      reinterpret_cast<unsigned long>(version)) != 0 ||
+        version[0] == '\0' ||
+        checked_ioctl(fd, CXD56_GNSS_IOCTL_START,
+                      CXD56_GNSS_STMOD_HOT) != 0) {
+        gnss_init_fail(fd);
+        return nullptr;
+    }
+
+    gnss_fd = fd;
+    gnss_have_timestamp = false;
+    __atomic_store_n(&gnss_init_state, GNSS_INIT_READY, __ATOMIC_RELEASE);
+    return nullptr;
+}
+
+bool start_gnss_init_thread()
+{
+    pthread_attr_t attributes {};
+    if (pthread_attr_init(&attributes) != 0) {
+        return false;
+    }
+
+    struct sched_param scheduling {};
+    scheduling.sched_priority = GNSS_INIT_PRIORITY;
+    const size_t stack_size = GNSS_INIT_STACK_BYTES < PTHREAD_STACK_MIN
+        ? PTHREAD_STACK_MIN : GNSS_INIT_STACK_BYTES;
+    const bool configured =
+        pthread_attr_setstacksize(&attributes, stack_size) == 0 &&
+        pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED) == 0 &&
+        pthread_attr_setschedpolicy(&attributes, SCHED_FIFO) == 0 &&
+        pthread_attr_setschedparam(&attributes, &scheduling) == 0 &&
+        pthread_attr_setinheritsched(&attributes, PTHREAD_EXPLICIT_SCHED) == 0;
+    pthread_t thread {};
+    const int result = configured
+        ? pthread_create(&thread, &attributes, gnss_init_thread, nullptr)
+        : -1;
+    (void)pthread_attr_destroy(&attributes);
+    if (result == 0) {
+        (void)pthread_setname_np(thread, "ap-gnss-init");
+    }
+    return result == 0;
+}
+
 } // namespace
 
 bool Spresense::sensor_bridge_platform_ready()
@@ -194,27 +264,30 @@ bool Spresense::sensor_bridge_platform_ready()
 
 bool Spresense::gnss_start()
 {
-    if (gnss_fd >= 0) {
-        return true;
+    // Sony's start ioctls synchronously wait for responses produced by the
+    // CXD5610 receive task.  Run that bounded handshake away from Copter's
+    // main loop so a missing or failed Add-on cannot stop GCS and INS work.
+    const uint8_t state = __atomic_load_n(
+        &gnss_init_state, __ATOMIC_ACQUIRE);
+    if (state == GNSS_INIT_READY) {
+        return gnss_fd >= 0;
     }
-    gnss_fd = open(CONFIG_SPRESENSE_M1_COPTER_GNSS_DEVICE,
-                   O_RDONLY | O_NONBLOCK);
-    if (gnss_fd < 0) {
+    if (state == GNSS_INIT_STARTING || state == GNSS_INIT_FAILED) {
         return false;
     }
 
-    char version[CXD56_GNSS_VERSION_MAXLEN] {};
-    if (checked_ioctl(gnss_fd, CXD56_GNSS_IOCTL_WAKEUP, 0U) != 0 ||
-        checked_ioctl(gnss_fd, CXD56_GNSS_IOCTL_GET_VERSION,
-                      reinterpret_cast<unsigned long>(version)) != 0 ||
-        version[0] == '\0' ||
-        checked_ioctl(gnss_fd, CXD56_GNSS_IOCTL_START,
-                      CXD56_GNSS_STMOD_HOT) != 0) {
-        close_device(gnss_fd);
+    uint8_t expected = GNSS_INIT_IDLE;
+    if (!__atomic_compare_exchange_n(
+            &gnss_init_state, &expected, GNSS_INIT_STARTING, false,
+            __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        return expected == GNSS_INIT_READY && gnss_fd >= 0;
+    }
+    if (!start_gnss_init_thread()) {
+        __atomic_store_n(
+            &gnss_init_state, GNSS_INIT_FAILED, __ATOMIC_RELEASE);
         return false;
     }
-    gnss_have_timestamp = false;
-    return true;
+    return false;
 }
 
 Spresense::SensorReadStatus Spresense::gnss_read(GnssSample &sample)
