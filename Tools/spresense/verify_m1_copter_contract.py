@@ -133,6 +133,8 @@ def main() -> int:
             "pthread_create",
             "PTHREAD_PRIO_INHERIT",
             'Spresense::UARTDriver serial0_driver("/dev/ttyS0")',
+            'SPRESENSE_M1_COPTER_BOOT=HAL',
+            'SPRESENSE_M1_COPTER_BOOT=SCHEDULER_FAIL',
             "Empty::I2CDeviceManager i2c_manager",
             "Empty::SPIDeviceManager spi_manager",
         ),

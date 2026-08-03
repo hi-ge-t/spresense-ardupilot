@@ -76,18 +76,30 @@ void Spresense::HAL_Spresense::run(
     (void)argc;
     (void)argv;
 
+    serial(0)->begin(115200U);
+    if (!serial(0)->is_initialized()) {
+        AP_HAL::panic("Spresense main UART startup failed");
+    }
+    console->printf("SPRESENSE_M1_COPTER_BOOT=HAL\n");
+    console->flush();
+
     scheduler->init();
     if (!scheduler_instance.timing_healthy()) {
+        console->printf("SPRESENSE_M1_COPTER_BOOT=SCHEDULER_FAIL\n");
+        console->flush();
         AP_HAL::panic("Spresense scheduler startup failed");
     }
-    serial(0)->begin(115200U);
     storage->init();
     gpio->init();
     rcin->init();
     rcout->init();
 
+    console->printf("SPRESENSE_M1_COPTER_BOOT=SETUP\n");
+    console->flush();
     callbacks->setup();
     scheduler->set_system_initialized();
+    console->printf("SPRESENSE_M1_COPTER_BOOT=LOOP\n");
+    console->flush();
 
     for (;;) {
         callbacks->loop();
