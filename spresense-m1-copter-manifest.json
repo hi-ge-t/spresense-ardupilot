@@ -19,7 +19,7 @@
   "copter": {
     "full_vehicle_archive": true,
     "scheduler": "nuttx-pthread",
-    "sensor_hal_integration": "HOLD",
+    "sensor_hal_integration": "GNSS+INS",
     "runtime": "hardware-HOLD",
     "flight_ready": false
   },
@@ -28,7 +28,7 @@
     "addon": "required",
     "device": "/dev/gps2",
     "ram": "required-complete-heap",
-    "hal_integration": "HOLD",
+    "hal_integration": "AP_GPS_Spresense",
     "runtime_fallback": "disabled"
   },
   "pwbimu": {
@@ -36,7 +36,8 @@
     "device": "/dev/imu0",
     "bus": "SPI5",
     "pinshare": "eMMC",
-    "hal_integration": "HOLD",
+    "hal_integration": "AP_InertialSensor_Spresense",
+    "orientation": "ROTATION_NONE-hardware-HOLD",
     "runtime_fallback": "disabled"
   },
   "safety": {
@@ -70,7 +71,7 @@
     "boot": "HOLD",
     "gcs": "HOLD",
     "arm_denial": "HOLD",
-    "sensor_hal_integration": "HOLD",
+    "sensor_hal_integration": "required",
     "sensor_runtime": "HOLD",
     "timing": "HOLD",
     "gnss_accuracy": "HOLD",

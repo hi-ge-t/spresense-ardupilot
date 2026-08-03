@@ -21,6 +21,7 @@ CXXSRCS += RCOutput.cpp
 CXXSRCS += SafeBringup.cpp
 CXXSRCS += Scheduler.cpp
 CXXSRCS += Semaphores.cpp
+CXXSRCS += SensorBridge.cpp
 CXXSRCS += Storage.cpp
 CXXSRCS += UARTDriver.cpp
 CXXSRCS += system.cpp

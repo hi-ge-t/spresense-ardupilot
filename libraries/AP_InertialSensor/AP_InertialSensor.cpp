@@ -38,6 +38,7 @@
 #include "AP_InertialSensor_ExternalAHRS.h"
 #include "AP_InertialSensor_Invensensev3.h"
 #include "AP_InertialSensor_NONE.h"
+#include "AP_InertialSensor_Spresense.h"
 #include "AP_InertialSensor_SCHA63T.h"
 #include "AP_InertialSensor_ASM330.h"
 #include <AP_Scheduler/AP_Scheduler.h>
@@ -1297,6 +1298,8 @@ AP_InertialSensor::detect_backends(void)
     default:
         break;
     }
+#elif HAL_INS_DEFAULT == HAL_INS_SPRESENSE
+    ADD_BACKEND(AP_InertialSensor_Spresense::probe(*this));
 #elif HAL_INS_DEFAULT == HAL_INS_NONE
     // no INS device
 #else

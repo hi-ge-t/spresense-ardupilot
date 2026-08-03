@@ -10,3 +10,15 @@ config SPRESENSE_M1_COPTER_LINK
 		the M1 software gate. PWM, actuator output and arming remain
 		compile-time disabled. This option alone does not make flight-ready
 		firmware.
+
+if SPRESENSE_M1_COPTER_LINK
+
+config SPRESENSE_M1_COPTER_GNSS_DEVICE
+	string "CXD5610 GNSS Add-on device"
+	default "/dev/gps2"
+
+config SPRESENSE_M1_COPTER_PWBIMU_DEVICE
+	string "CXD5602PWBIMU device"
+	default "/dev/imu0"
+
+endif

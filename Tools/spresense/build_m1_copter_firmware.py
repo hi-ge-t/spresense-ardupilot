@@ -60,6 +60,12 @@ REQUIRED_SYMBOLS = {
     "_ZN9Spresense8RCOutput5writeEht",
     "_ZN9Spresense9Scheduler13thread_createE7FunctorIvJEEPKcmN6AP_HAL9Scheduler13priority_baseEa",
     "_ZN9Spresense9Semaphore4takeEm",
+    "_ZN9Spresense10gnss_startEv",
+    "_ZN9Spresense9gnss_readERNS_10GnssSampleE",
+    "_ZN9Spresense12pwbimu_startEt",
+    "_ZN9Spresense11pwbimu_readERNS_9ImuSampleE",
+    "_ZN16AP_GPS_Spresense4readEv",
+    "_ZN27AP_InertialSensor_Spresense10accumulateEv",
 }
 FORBIDDEN_SYMBOLS = {
     "spresense_main",
@@ -378,13 +384,14 @@ def main() -> int:
             "m1.gnss.addon": "required",
             "m1.gnss.device": "/dev/gps2",
             "m1.gnss.ram": "required-complete-heap",
-            "m1.gnss.hal_integration": "HOLD",
+            "m1.gnss.hal_integration": "AP_GPS_Spresense",
             "m1.pwbimu.addon": "required",
             "m1.pwbimu.device": "/dev/imu0",
             "m1.pwbimu.bus": "SPI5",
             "m1.pwbimu.pinshare": "eMMC",
-            "m1.pwbimu.hal_integration": "HOLD",
-            "m1.sensor.hal_integration": "HOLD",
+            "m1.pwbimu.hal_integration": "AP_InertialSensor_Spresense",
+            "m1.pwbimu.orientation": "ROTATION_NONE-hardware-HOLD",
+            "m1.sensor.hal_integration": "GNSS+INS",
             "m1.sensor.runtime": "hardware-HOLD",
             "m1.sensor_fallback": "disabled",
             "m1.outputs": "disabled",
@@ -430,7 +437,7 @@ def main() -> int:
         "spresense_m1_copter_build=PASS "
         f"project_commit={project_commit} "
         f"tree={'dirty' if dirty else 'clean'} gcc={gcc_version} "
-        f"artifact_dir={artifact_dir} sensors=HAL-HOLD"
+        f"artifact_dir={artifact_dir} sensors=GNSS+INS"
     )
     return 0
 

@@ -46,6 +46,25 @@ def main() -> int:
         subprocess.run(command, cwd=root, check=True)
         subprocess.run([str(binary)], cwd=root, check=True)
 
+        sensor_binary = temporary_path / "test_sensor_bridge"
+        sensor_command = [
+            compiler,
+            "-std=c++17",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-pedantic",
+            str(root / "libraries/AP_HAL_Spresense/SensorBridge.cpp"),
+            str(
+                root /
+                "libraries/AP_HAL_Spresense/tests/test_sensor_bridge.cpp"
+            ),
+            "-o",
+            str(sensor_binary),
+        ]
+        subprocess.run(sensor_command, cwd=root, check=True)
+        subprocess.run([str(sensor_binary)], cwd=root, check=True)
+
         for adapter_source in adapter_sources:
             adapter_object = temporary_path / f"{adapter_source.stem}.o"
             adapter_command = [

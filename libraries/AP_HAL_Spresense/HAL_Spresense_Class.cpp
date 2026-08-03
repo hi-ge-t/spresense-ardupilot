@@ -7,6 +7,7 @@
 #include "HAL_Spresense_Class.h"
 #include "RCOutput.h"
 #include "Scheduler.h"
+#include "SensorBridge.h"
 #include "Storage.h"
 #include "UARTDriver.h"
 #include "Util.h"
@@ -79,6 +80,9 @@ void Spresense::HAL_Spresense::run(
     serial(0)->begin(115200U);
     if (!serial(0)->is_initialized()) {
         AP_HAL::panic("Spresense main UART startup failed");
+    }
+    if (!Spresense::sensor_bridge_platform_ready()) {
+        AP_HAL::panic("Spresense sensor bridge unavailable");
     }
     console->printf("SPRESENSE_M1_COPTER_BOOT=HAL\n");
     console->flush();

@@ -41,6 +41,10 @@
 #include "AP_GPS_MAV.h"
 #include "AP_GPS_MSP.h"
 #include "AP_GPS_ExternalAHRS.h"
+#include "AP_GPS_Spresense.h"
+#if AP_GPS_SPRESENSE_ENABLED
+#include <AP_HAL_Spresense/SensorBridge.h>
+#endif
 #include "GPS_Backend.h"
 #if AP_SIM_GPS_ENABLED
 #include "AP_GPS_SITL.h"
@@ -314,6 +318,7 @@ bool AP_GPS::needs_uart(GPS_Type type) const
     case GPS_TYPE_MAV:
     case GPS_TYPE_MSP:
     case GPS_TYPE_EXTERNAL_AHRS:
+    case GPS_TYPE_SPRESENSE:
         return false;
     default:
         break;
@@ -651,6 +656,15 @@ AP_GPS_Backend *AP_GPS::_detect_instance(const uint8_t instance)
     auto *port = (instance < ARRAY_SIZE(_port)) ? _port[instance] : nullptr;
 
     switch (GPS_Type(type)) {
+#if AP_GPS_SPRESENSE_ENABLED
+    case GPS_TYPE_SPRESENSE:
+        if (instance == 0U && Spresense::gnss_start()) {
+            dstate->auto_detected_baud = false;
+            return NEW_NOTHROW AP_GPS_Spresense(
+                *this, params[instance], state[instance], nullptr);
+        }
+        return nullptr;
+#endif
     // user has to explicitly set the MAV type, do not use AUTO
     // do not try to detect the MAV type, assume it's there
     case GPS_TYPE_MAV:

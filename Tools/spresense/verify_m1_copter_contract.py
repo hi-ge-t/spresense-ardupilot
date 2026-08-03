@@ -19,20 +19,21 @@ EXPECTED = {
     "target.entrypoint": "arducopter_spresense_main",
     "copter.full_vehicle_archive": True,
     "copter.scheduler": "nuttx-pthread",
-    "copter.sensor_hal_integration": "HOLD",
+    "copter.sensor_hal_integration": "GNSS+INS",
     "copter.runtime": "hardware-HOLD",
     "copter.flight_ready": False,
     "gnss.builtin": "disabled",
     "gnss.addon": "required",
     "gnss.device": "/dev/gps2",
     "gnss.ram": "required-complete-heap",
-    "gnss.hal_integration": "HOLD",
+    "gnss.hal_integration": "AP_GPS_Spresense",
     "gnss.runtime_fallback": "disabled",
     "pwbimu.addon": "required",
     "pwbimu.device": "/dev/imu0",
     "pwbimu.bus": "SPI5",
     "pwbimu.pinshare": "eMMC",
-    "pwbimu.hal_integration": "HOLD",
+    "pwbimu.hal_integration": "AP_InertialSensor_Spresense",
+    "pwbimu.orientation": "ROTATION_NONE-hardware-HOLD",
     "pwbimu.runtime_fallback": "disabled",
     "safety.arming": "copter-path-always-reject",
     "safety.actuator_driver": "reject-only-no-physical-backend",
@@ -47,7 +48,7 @@ EXPECTED = {
     "storage.automatic_fallback": "disabled",
     "storage.pwbimu_emmc_coexistence": "hardware-design-HOLD",
     "distribution.binary": "disabled",
-    "evidence.sensor_hal_integration": "HOLD",
+    "evidence.sensor_hal_integration": "required",
     "evidence.sensor_runtime": "HOLD",
     "evidence.timing": "HOLD",
     "evidence.gnss_accuracy": "HOLD",
@@ -94,7 +95,8 @@ def main() -> int:
         board,
         (
             "#define HAL_NUM_CAN_IFACES 0",
-            "#define HAL_INS_DEFAULT HAL_INS_NONE",
+            "#define HAL_INS_DEFAULT HAL_INS_SPRESENSE",
+            "#define HAL_GPS1_TYPE_DEFAULT 27",
             "#define HAL_SPRESENSE_OUTPUT_DISABLED 1",
             "#define AP_NETWORKING_ENABLED 0",
             "#define HAL_LOGGING_FILESYSTEM_ENABLED 0",
@@ -136,8 +138,55 @@ def main() -> int:
             'Spresense::UARTDriver serial0_driver("/dev/ttyS0")',
             'SPRESENSE_M1_COPTER_BOOT=HAL',
             'SPRESENSE_M1_COPTER_BOOT=SCHEDULER_FAIL',
+            "sensor_bridge_platform_ready",
             "Empty::I2CDeviceManager i2c_manager",
             "Empty::SPIDeviceManager spi_manager",
+        ),
+    )
+
+    sensor_bridge = (hal_root / "SensorBridge.cpp").read_text(
+        encoding="utf-8"
+    )
+    require_tokens(
+        failures,
+        "sensor-bridge",
+        sensor_bridge,
+        (
+            "CONFIG_SPRESENSE_M1_COPTER_GNSS_DEVICE",
+            "CONFIG_SPRESENSE_M1_COPTER_PWBIMU_DEVICE",
+            "CXD56_GNSS_IOCTL_START",
+            "SNIOC_SSAMPRATE",
+            "O_NONBLOCK",
+            "return false;",
+        ),
+    )
+    gps_backend = (root / "libraries/AP_GPS/AP_GPS_Spresense.cpp").read_text(
+        encoding="utf-8"
+    )
+    require_tokens(
+        failures,
+        "gps-backend",
+        gps_backend,
+        (
+            "Spresense::gnss_read",
+            "state.location.lat",
+            "state.velocity",
+            "return false;",
+        ),
+    )
+    ins_backend = (
+        root /
+        "libraries/AP_InertialSensor/AP_InertialSensor_Spresense.cpp"
+    ).read_text(encoding="utf-8")
+    require_tokens(
+        failures,
+        "ins-backend",
+        ins_backend,
+        (
+            "Spresense::pwbimu_read",
+            "_notify_new_accel_raw_sample",
+            "_notify_new_gyro_raw_sample",
+            "ROTATION_NONE",
         ),
     )
     require_tokens(
@@ -173,6 +222,16 @@ def main() -> int:
             "-CXD56_PWM=y",
             "-PWM=y",
         ),
+    )
+
+    app_makefile = (root / "Tools/spresense/copter_app/Makefile").read_text(
+        encoding="utf-8"
+    )
+    require_tokens(
+        failures,
+        "copter-app",
+        app_makefile,
+        ("CXXSRCS += SensorBridge.cpp",),
     )
 
     build = (
@@ -216,7 +275,7 @@ def main() -> int:
         return 1
     print(
         "spresense_m1_copter_contract=PASS "
-        "outputs=disabled sensors=HAL-HOLD flight_ready=false"
+        "outputs=disabled sensors=GNSS+INS flight_ready=false"
     )
     return 0
 

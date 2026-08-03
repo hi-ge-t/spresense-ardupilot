@@ -2,7 +2,9 @@
 
 > This fork contains an experimental, output-disabled Sony Spresense bring-up.
 > The real Copter archive now links and passes an output-disabled boot/GCS/ARM
-> rejection gate. Sensor HAL integration and all physical outputs remain
+> rejection gate. Dedicated CXD5610 GNSS and CXD5602PWBIMU GPS/INS backends
+> now pass host and Sony SDK cross-build guards; their current firmware still
+> requires the hardware sensor-runtime gate. All physical outputs remain
 > disabled/HOLD. It is not flight-ready firmware. See
 > [Spresense M1 bring-up](docs/SPRESENSE_M1.md).
 
