@@ -1,9 +1,10 @@
 # ArduPilot Project
 
 > This fork contains an experimental, output-disabled Sony Spresense bring-up.
-> The real Copter archive now links for the M1 software gate, but sensor HAL
-> integration and all physical outputs remain disabled/HOLD. It is not
-> flight-ready firmware. See [Spresense M1 bring-up](docs/SPRESENSE_M1.md).
+> The real Copter archive now links and passes an output-disabled boot/GCS/ARM
+> rejection gate. Sensor HAL integration and all physical outputs remain
+> disabled/HOLD. It is not flight-ready firmware. See
+> [Spresense M1 bring-up](docs/SPRESENSE_M1.md).
 
 [![Discord](https://img.shields.io/discord/674039678562861068.svg)](https://ardupilot.org/discord)
 

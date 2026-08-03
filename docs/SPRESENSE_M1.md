@@ -21,7 +21,8 @@ M1 now contains three separate software slices:
    reject-only RCOutput, a hard rejection at the Copter arming entry point and
    no PWM, DShot or CAN backend.
 
-The third slice closes the software link and memory-feasibility gate only.
+The third slice closes the software link, memory-feasibility and narrow
+boot/GCS/arming-denial gates only.
 Its I2C and SPI managers are still the empty implementations and
 `HAL_INS_DEFAULT` is `HAL_INS_NONE`. The Sony board configuration links the
 CXD5610 and CXD5602PWBIMU drivers, but `/dev/gps2` and `/dev/imu0` are not yet
@@ -59,8 +60,10 @@ modes.
   synthetic GNSS fallback and must complete one bounded Add-on sample probe.
 - In the combined profile, Sony's CXD5602PWBIMU driver, SPI5 DMAC and
   `/dev/imu0` are mandatory. There is no synthetic sensor or runtime fallback.
-- The main-board CP2102N UART is `/dev/ttyS0` at 115200 baud. NSH, CDC-ACM and
-  USB mass storage commands are disabled so text cannot corrupt MAVLink.
+- The dedicated profile selects UART1 as the NuttX console so the main-board
+  CP2102N UART is `/dev/ttyS0` at 115200 baud. NSH, CDC-ACM and USB mass
+  storage commands are disabled. Startup text can precede MAVLink; the runtime
+  checker waits for and resynchronizes on the first valid heartbeat.
 - Development storage remains microSD and the final candidate remains eMMC.
   No automatic storage fallback is introduced by this slice.
 - The standard Multi-IMU driver uses SPI5 on pins shared with eMMC, and this
@@ -140,6 +143,8 @@ conditions hold:
 - NuttX pthread scheduler, recursive priority-inheritance semaphore and both
   Add-on driver symbols are present;
 - built-in GNSS, eMMC, PWM and NuttX PWM remain disabled;
+- UART1 is the selected console so `/dev/ttyS0` remains the main-board GCS
+  transport;
 - reject-only RCOutput and the compile-time Copter arming guard remain in the
   source contract;
 - Application SRAM code/rodata/data/bss/heap stay inside the 1536 KiB region;
@@ -213,8 +218,8 @@ software-only build record is
 `docs/evidence/SPRESENSE_M1_PWBIMU_GNSS_BUILD_20260803.md`. A single combined
 GNSS + Multi-IMU bench run was completed on 2026-08-03 and is recorded in
 `docs/evidence/SPRESENSE_M1_COMBINED_RUNTIME_20260803.md`. Generated firmware
-and the detailed runtime JSON remain ignored build artifacts. The software-only
-full-Copter link record is
+and the detailed runtime JSON remain ignored build artifacts. The full-Copter
+link and output-disabled runtime record is
 `docs/evidence/SPRESENSE_M1_COPTER_LINK_BUILD_20260803.md`.
 
 ## Evidence and HOLD items
@@ -229,9 +234,9 @@ full-Copter link record is
 | Application/GNSS RAM linker boundaries | Confirmed | `memory-layout.json`; runtime timing remains unqualified |
 | Spresense boot and bidirectional serial GCS | Confirmed, one bench run | `M1GCS001`, four parameters and ARM `DENIED` on 2026-08-01 |
 | QGroundControl discovery | Confirmed, one bench run | QGroundControl 5.0.8 displayed ArduPilot / Not Ready |
-| Full Sony NuttX Copter link/SPK | Confirmed, software only | real Copter archive, unique entry, pthread scheduler and Sony link pass; clean artifact required for hardware |
-| Copter Application/GNSS RAM boundaries | Confirmed, software only | Application heap envelope 507012 bytes; GNSS heap 655360 bytes; runtime pressure remains unqualified |
-| Copter boot, GCS and ARM rejection | HOLD | requires the separate clean Copter artifact hardware procedure |
+| Full Sony NuttX Copter link/SPK | Confirmed | clean artifact `040d5f9a7f...`; real Copter archive, unique entry, pthread scheduler and Sony link pass |
+| Copter Application/GNSS RAM boundaries | Confirmed | Application heap envelope 504964 bytes; GNSS heap 655360 bytes; runtime pressure remains unqualified |
+| Copter boot, GCS and ARM rejection | Confirmed, one bench run | ArduPilot heartbeat; normal and forced ARM both `MAV_RESULT_FAILED`; armed=false on 2026-08-03 |
 | ArduPilot GNSS/Multi-IMU HAL integration | HOLD | Sony driver symbols link, but current HAL still uses empty I2C/SPI managers and no INS backend |
 | GNSS Add-on bounded sample | Confirmed, one bench run | `M1PGN001`, `M1_GNSS_OK=1`, `M1_GNSS_ERR=0`; fix, accuracy and latency remain HOLD |
 | Multi-IMU startup sample | Confirmed, one bench run | `M1PGN001`, `M1_IMU_OK=1` on 2026-08-03 |
