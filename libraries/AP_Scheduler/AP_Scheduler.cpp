@@ -194,6 +194,9 @@ void AP_Scheduler::run(uint32_t time_available)
 {
     uint32_t run_started_usec = AP_HAL::micros();
     uint32_t now = run_started_usec;
+#if CONFIG_HAL_BOARD == HAL_BOARD_SPRESENSE
+    static bool trace_first_run = true;
+#endif
 
     uint8_t vehicle_tasks_offset = 0;
     uint8_t common_tasks_offset = 0;
@@ -269,7 +272,19 @@ void AP_Scheduler::run(uint32_t time_available)
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
         fill_nanf_stack();
 #endif
+#if CONFIG_HAL_BOARD == HAL_BOARD_SPRESENSE
+        if (trace_first_run) {
+            hal.console->printf("SPRESENSE_M1_TASK=BEGIN:%u:%s\n",
+                                static_cast<unsigned>(i), task.name);
+        }
+#endif
         task.function();
+#if CONFIG_HAL_BOARD == HAL_BOARD_SPRESENSE
+        if (trace_first_run) {
+            hal.console->printf("SPRESENSE_M1_TASK=END:%u:%s\n",
+                                static_cast<unsigned>(i), task.name);
+        }
+#endif
         hal.util->persistent_data.scheduler_task = -1;
 
         // record the tick counter when we ran. This drives
@@ -316,6 +331,9 @@ void AP_Scheduler::run(uint32_t time_available)
         _spare_ticks /= 2;
         _spare_micros /= 2;
     }
+#if CONFIG_HAL_BOARD == HAL_BOARD_SPRESENSE
+    trace_first_run = false;
+#endif
 }
 
 /*
