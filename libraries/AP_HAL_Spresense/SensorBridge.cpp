@@ -149,6 +149,7 @@ bool Spresense::convert_imu_sample(const ImuRawSample &raw,
 #include <poll.h>
 #include <pthread.h>
 #include <sched.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -168,6 +169,7 @@ uint32_t gnss_consumed_sequence;
 bool gnss_attach_reported;
 bool gnss_read_reported;
 bool gnss_consumed_reported;
+bool gnss_main_priority_reported;
 
 constexpr uint8_t GNSS_INIT_IDLE = 0U;
 constexpr uint8_t GNSS_INIT_STARTING = 1U;
@@ -205,6 +207,21 @@ void close_device(int &fd)
 void gnss_init_marker(const char *marker)
 {
     (void)write(STDOUT_FILENO, marker, strlen(marker));
+}
+
+void gnss_priority_marker(const char *role)
+{
+    struct sched_param scheduling {};
+    char marker[64] {};
+    if (sched_getparam(0, &scheduling) != 0) {
+        return;
+    }
+    const int length = snprintf(marker, sizeof(marker),
+                                "SPRESENSE_M1_GNSS=%s_PRIORITY_%d\n",
+                                role, scheduling.sched_priority);
+    if (length > 0 && length < static_cast<int>(sizeof(marker))) {
+        (void)write(STDOUT_FILENO, marker, static_cast<size_t>(length));
+    }
 }
 
 void gnss_init_fail(int &fd, const char *marker)
@@ -301,6 +318,7 @@ void run_gnss_reader()
 void *gnss_init_thread(void *)
 {
     gnss_init_marker("SPRESENSE_M1_GNSS=THREAD\n");
+    gnss_priority_marker("INIT");
     int fd = open(CONFIG_SPRESENSE_M1_COPTER_GNSS_DEVICE,
                   O_RDONLY | O_NONBLOCK);
     if (fd < 0) {
@@ -355,12 +373,15 @@ bool start_gnss_init_thread()
         pthread_attr_setschedparam(&attributes, &scheduling) == 0 &&
         pthread_attr_setinheritsched(&attributes, PTHREAD_EXPLICIT_SCHED) == 0;
     pthread_t thread {};
+    gnss_init_marker("SPRESENSE_M1_GNSS=CREATE\n");
     const int result = configured
         ? pthread_create(&thread, &attributes, gnss_init_thread, nullptr)
         : -1;
+    gnss_init_marker("SPRESENSE_M1_GNSS=CREATED\n");
     (void)pthread_attr_destroy(&attributes);
     if (result == 0) {
         (void)pthread_setname_np(thread, "ap-gnss-init");
+        gnss_init_marker("SPRESENSE_M1_GNSS=NAMED\n");
     }
     return result == 0;
 }
@@ -377,6 +398,10 @@ bool Spresense::gnss_start()
     // Sony's start ioctls synchronously wait for responses produced by the
     // CXD5610 receive task.  Run that bounded handshake away from Copter's
     // main loop so a missing or failed Add-on cannot stop GCS and INS work.
+    if (!gnss_main_priority_reported) {
+        gnss_main_priority_reported = true;
+        gnss_priority_marker("MAIN");
+    }
     const uint8_t state = __atomic_load_n(
         &gnss_init_state, __ATOMIC_ACQUIRE);
     if (state == GNSS_INIT_READY) {
