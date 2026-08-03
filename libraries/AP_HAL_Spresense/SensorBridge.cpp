@@ -145,7 +145,9 @@ bool Spresense::convert_imu_sample(const ImuRawSample &raw,
 
 #if defined(__NuttX__)
 
+#include <arch/board/board.h>
 #include <arch/chip/gnss.h>
+#include <arch/chip/pin.h>
 #include <nuttx/sensors/cxd5602pwbimu.h>
 
 #include <errno.h>
@@ -562,18 +564,46 @@ bool Spresense::pwbimu_start(uint16_t sample_rate_hz)
     pwbimu_fd = open(CONFIG_SPRESENSE_M1_COPTER_PWBIMU_DEVICE,
                      O_RDONLY | O_NONBLOCK);
     if (pwbimu_fd < 0) {
+        gnss_marker("SPRESENSE_M1_PWBIMU=OPEN_FAILED\n");
         return false;
+    }
+    gnss_marker("SPRESENSE_M1_PWBIMU=OPEN_OK\n");
+
+    const int board_count = ioctl(pwbimu_fd, SNIOC_GETBNUM, 0UL);
+    if (board_count == 1) {
+        gnss_marker("SPRESENSE_M1_PWBIMU=BOARD_1\n");
+    } else if (board_count == 2) {
+        gnss_marker("SPRESENSE_M1_PWBIMU=BOARD_2\n");
+    } else {
+        gnss_marker("SPRESENSE_M1_PWBIMU=BOARD_UNKNOWN\n");
     }
 
     cxd5602pwbimu_range_t range {2, 125};
-    if (checked_ioctl(pwbimu_fd, SNIOC_SSAMPRATE, sample_rate_hz) != 0 ||
-        checked_ioctl(pwbimu_fd, SNIOC_SDRANGE,
-                      reinterpret_cast<unsigned long>(&range)) != 0 ||
-        checked_ioctl(pwbimu_fd, SNIOC_SFIFOTHRESH, 1U) != 0 ||
-        checked_ioctl(pwbimu_fd, SNIOC_ENABLE, 1U) != 0) {
+    if (checked_ioctl(pwbimu_fd, SNIOC_SSAMPRATE, sample_rate_hz) != 0) {
+        gnss_marker("SPRESENSE_M1_PWBIMU=RATE_FAILED\n");
         close_device(pwbimu_fd);
         return false;
     }
+    gnss_marker("SPRESENSE_M1_PWBIMU=RATE_OK\n");
+    if (checked_ioctl(pwbimu_fd, SNIOC_SDRANGE,
+                      reinterpret_cast<unsigned long>(&range)) != 0) {
+        gnss_marker("SPRESENSE_M1_PWBIMU=RANGE_FAILED\n");
+        close_device(pwbimu_fd);
+        return false;
+    }
+    gnss_marker("SPRESENSE_M1_PWBIMU=RANGE_OK\n");
+    if (checked_ioctl(pwbimu_fd, SNIOC_SFIFOTHRESH, 1U) != 0) {
+        gnss_marker("SPRESENSE_M1_PWBIMU=FIFO_FAILED\n");
+        close_device(pwbimu_fd);
+        return false;
+    }
+    gnss_marker("SPRESENSE_M1_PWBIMU=FIFO_OK\n");
+    if (checked_ioctl(pwbimu_fd, SNIOC_ENABLE, 1U) != 0) {
+        gnss_marker("SPRESENSE_M1_PWBIMU=ENABLE_FAILED\n");
+        close_device(pwbimu_fd);
+        return false;
+    }
+    gnss_marker("SPRESENSE_M1_PWBIMU=ENABLE_OK\n");
 
     // Yield once after enabling the device so Sony's HPWORK producer can
     // publish the initial sample during Copter setup.  Do not use poll() in
@@ -581,7 +611,13 @@ bool Spresense::pwbimu_start(uint16_t sample_rate_hz)
     // poll waiter while taking its device lock, and repeated setup/teardown
     // from wait_for_sample() can block the flight-control thread.  The file
     // remains O_NONBLOCK, so a direct read below returns EAGAIN immediately.
-    (void)ready_to_read(pwbimu_fd, PWBIMU_STARTUP_POLL_TIMEOUT_MS);
+    const bool poll_ready = ready_to_read(pwbimu_fd, PWBIMU_STARTUP_POLL_TIMEOUT_MS);
+    gnss_marker(poll_ready
+        ? "SPRESENSE_M1_PWBIMU=POLL_READY\n"
+        : "SPRESENSE_M1_PWBIMU=POLL_TIMEOUT_OR_ERROR\n");
+    gnss_marker(board_gpio_read(PIN_EMMC_DATA3) != 0
+        ? "SPRESENSE_M1_PWBIMU=DRDY_HIGH\n"
+        : "SPRESENSE_M1_PWBIMU=DRDY_LOW\n");
     return true;
 }
 
