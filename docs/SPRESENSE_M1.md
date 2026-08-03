@@ -130,7 +130,8 @@ The first hardware run was completed on 2026-08-01. The committed evidence
 summary is `docs/evidence/SPRESENSE_M1_GCS_20260801.md`; generated firmware and
 the detailed runtime JSON remain ignored build artifacts. That run used the
 GNSS-only profile with the Multi-IMU removed. It does not validate the new
-combined profile.
+combined profile. The combined profile's software-only build record is
+`docs/evidence/SPRESENSE_M1_PWBIMU_GNSS_BUILD_20260803.md`.
 
 ## Evidence and HOLD items
 
