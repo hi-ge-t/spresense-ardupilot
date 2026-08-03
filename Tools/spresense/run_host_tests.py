@@ -25,6 +25,7 @@ def main() -> int:
         root / "libraries/AP_HAL_Spresense/UARTDriver.cpp",
         root / "libraries/AP_HAL_Spresense/Storage.cpp",
         root / "libraries/AP_HAL_Spresense/Scheduler.cpp",
+        root / "libraries/AP_HAL_Spresense/Semaphores.cpp",
         root / "libraries/AP_HAL_Spresense/RCOutput.cpp",
     ]
     with tempfile.TemporaryDirectory(prefix="spresense-m1-host-") as temporary_directory:
@@ -100,6 +101,26 @@ def main() -> int:
 
     subprocess.run(
         [sys.executable, str(root / "Tools/spresense/verify_m1_contract.py")],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(
+        [sys.executable,
+         str(root / "Tools/spresense/verify_m1_copter_contract.py")],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(
+        [sys.executable,
+         str(root / "Tools/spresense/tests/test_verify_m1_copter_map.py")],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(
+        [sys.executable, "-m", "py_compile",
+         str(root / "Tools/spresense/build_m1_copter_firmware.py"),
+         str(root / "Tools/spresense/m1_copter_serial_check.py"),
+         str(root / "Tools/spresense/verify_m1_copter_map.py")],
         cwd=root,
         check=True,
     )

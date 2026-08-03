@@ -1,0 +1,3 @@
+ifneq ($(CONFIG_SPRESENSE_M1_COPTER_LINK),)
+CONFIGURED_APPS += copter_app
+endif

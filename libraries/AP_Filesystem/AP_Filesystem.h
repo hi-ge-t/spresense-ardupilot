@@ -28,7 +28,9 @@
 #define MAX_NAME_LEN 255
 #endif
 
-#if (CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS) || (CONFIG_HAL_BOARD == HAL_BOARD_ESP32)
+#if (CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS) || \
+    (CONFIG_HAL_BOARD == HAL_BOARD_ESP32) || \
+    (CONFIG_HAL_BOARD == HAL_BOARD_SPRESENSE)
 #define DT_REG 0
 #define DT_DIR 1
 #define DT_LNK 10
@@ -42,12 +44,18 @@
 #include "AP_Filesystem_FlashMemory_LittleFS.h"
 #endif
 
+#endif // HAL_BOARD_CHIBIOS
+
+#if CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS || CONFIG_HAL_BOARD == HAL_BOARD_SPRESENSE
+// The bare-metal GCC toolchain used for the Spresense archive only forward
+// declares dirent.  The first Copter link gate deliberately has no physical
+// filesystem backend, but virtual @SYS/@PARAM directory entries still need a
+// concrete, private representation.
 struct dirent {
    char    d_name[MAX_NAME_LEN]; /* filename */
    uint8_t d_type;
 };
-
-#endif // HAL_BOARD_CHIBIOS
+#endif
 
 #include <fcntl.h>
 #include <errno.h>
@@ -180,4 +188,3 @@ private:
 namespace AP {
     AP_Filesystem &FS();
 };
-

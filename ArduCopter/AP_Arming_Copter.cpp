@@ -674,6 +674,11 @@ void AP_Arming_Copter::set_pre_arm_check(bool b)
 
 bool AP_Arming_Copter::arm(const AP_Arming::Method method, const bool do_arming_checks)
 {
+#if defined(HAL_SPRESENSE_OUTPUT_DISABLED) && HAL_SPRESENSE_OUTPUT_DISABLED
+    gcs().send_text(MAV_SEVERITY_CRITICAL, "Arm: Spresense outputs disabled");
+    return false;
+#endif
+
     static bool in_arm_motors = false;
 
     // exit immediately if already in this function

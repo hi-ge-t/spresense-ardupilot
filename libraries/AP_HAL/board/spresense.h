@@ -15,6 +15,18 @@
 #define HAL_OS_SOCKETS 0
 #define HAL_NUM_CAN_IFACES 0
 #define HAL_INS_DEFAULT HAL_INS_NONE
+#define HAL_WITH_DSP 0
+#define HAL_WITH_EKF_DOUBLE 0
+
+// This bring-up target must remain impossible to arm until a later,
+// separately reviewed physical-output gate explicitly removes this contract.
+#define HAL_SPRESENSE_OUTPUT_DISABLED 1
+
+#ifdef __cplusplus
+#include <AP_HAL_Spresense/Semaphores.h>
+#define HAL_Semaphore Spresense::Semaphore
+#define HAL_BinarySemaphore Spresense::BinarySemaphore
+#endif
 
 #define HAL_HAVE_BOARD_VOLTAGE 0
 #define HAL_HAVE_SERVO_VOLTAGE 0
@@ -22,3 +34,14 @@
 
 #define AP_SCRIPTING_ENABLED 0
 #define AP_NETWORKING_ENABLED 0
+
+// M1 keeps parameter storage on the explicitly configured microSD path, but
+// does not claim a NuttX-compatible AP_Filesystem ABI or file logging yet.
+// Those are separate integration gates and must not silently fall back.
+#define AP_FILESYSTEM_POSIX_ENABLED 0
+#define AP_FILESYSTEM_FATFS_ENABLED 0
+#define AP_FILESYSTEM_LITTLEFS_ENABLED 0
+#define AP_FILESYSTEM_FILE_WRITING_ENABLED 0
+#define AP_FILESYSTEM_FORMAT_ENABLED 0
+#define HAL_LOGGING_FILESYSTEM_ENABLED 0
+#define AP_TERRAIN_AVAILABLE 0

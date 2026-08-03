@@ -1,0 +1,12 @@
+config SPRESENSE_M1_COPTER_LINK
+	bool "Spresense M1 output-disabled ArduCopter link"
+	default n
+	depends on CXD56_GNSS_RAM && CXD56_GNSS_HEAP
+	depends on CXD56_GNSS_ADDON && SENSORS_CXD5610_GNSS
+	depends on SENSORS_CXD5602PWBIMU
+	depends on !CXD56_GNSS
+	---help---
+		Link the real ArduCopter vehicle archive with AP_HAL_Spresense for
+		the M1 software gate. PWM, actuator output and arming remain
+		compile-time disabled. This option alone does not make flight-ready
+		firmware.

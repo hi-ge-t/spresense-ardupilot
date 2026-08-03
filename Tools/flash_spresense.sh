@@ -14,8 +14,23 @@ fi
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 PORT=$1
 MODE=${2:---preflight}
-ARTIFACT_DIR=${SPFC_ARTIFACT_DIR:-"${ROOT_DIR}/build/spresense-m1-pwbimu-gnss-gcs-artifacts"}
 PROFILE=${SPFC_PROFILE:-spresense-m1-pwbimu-gnss-gcs}
+case ${PROFILE} in
+  spresense-m1-gcs)
+    DEFAULT_ARTIFACT_DIR="${ROOT_DIR}/build/spresense-m1-gcs-artifacts"
+    ;;
+  spresense-m1-pwbimu-gnss-gcs)
+    DEFAULT_ARTIFACT_DIR="${ROOT_DIR}/build/spresense-m1-pwbimu-gnss-gcs-artifacts"
+    ;;
+  spresense-m1-copter-link)
+    DEFAULT_ARTIFACT_DIR="${ROOT_DIR}/build/spresense-m1-copter-link-artifacts"
+    ;;
+  *)
+    echo "Unsupported Spresense profile: ${PROFILE}" >&2
+    exit 2
+    ;;
+esac
+ARTIFACT_DIR=${SPFC_ARTIFACT_DIR:-${DEFAULT_ARTIFACT_DIR}}
 MANIFEST="${ARTIFACT_DIR}/ARTIFACTS.manifest"
 IMAGE="${ARTIFACT_DIR}/nuttx.spk"
 WRITER="${ROOT_DIR}/modules/Spresense/sdk/tools/flash_writer/scripts/flash_writer.py"
@@ -45,10 +60,10 @@ fi
 for contract in \
   'm1.gnss.builtin=disabled' \
   'm1.gnss.addon=required' \
-  'm1.gnss.ram=required' \
   'm1.outputs=disabled' \
   'm1.arming=always-denied' \
-  'm1.physical_write_expected=0'; do
+  'm1.physical_write_expected=0' \
+  'm1.storage.automatic_fallback=disabled'; do
   key=${contract%%=*}
   expected=${contract#*=}
   if [[ $(manifest_value "${key}") != "${expected}" ]]; then
@@ -56,6 +71,12 @@ for contract in \
     exit 1
   fi
 done
+
+if [[ ${PROFILE} != spresense-m1-copter-link &&
+      $(manifest_value m1.gnss.ram) != required ]]; then
+  echo "Artifact GNSS RAM contract mismatch: m1.gnss.ram=required" >&2
+  exit 1
+fi
 
 if [[ ${PROFILE} == spresense-m1-pwbimu-gnss-gcs ]]; then
   for contract in \
@@ -73,6 +94,34 @@ if [[ ${PROFILE} == spresense-m1-pwbimu-gnss-gcs ]]; then
     expected=${contract#*=}
     if [[ $(manifest_value "${key}") != "${expected}" ]]; then
       echo "Artifact Multi-IMU contract mismatch: ${contract}" >&2
+      exit 1
+    fi
+  done
+fi
+
+if [[ ${PROFILE} == spresense-m1-copter-link ]]; then
+  for contract in \
+    'm1.copter.full=true' \
+    'm1.copter.entry=arducopter_spresense_main' \
+    'm1.copter.scheduler=nuttx-pthread' \
+    'm1.gnss.device=/dev/gps2' \
+    'm1.gnss.ram=required-complete-heap' \
+    'm1.gnss.hal_integration=HOLD' \
+    'm1.pwbimu.addon=required' \
+    'm1.pwbimu.device=/dev/imu0' \
+    'm1.pwbimu.bus=SPI5' \
+    'm1.pwbimu.pinshare=eMMC' \
+    'm1.pwbimu.hal_integration=HOLD' \
+    'm1.sensor.hal_integration=HOLD' \
+    'm1.sensor.runtime=hardware-HOLD' \
+    'm1.sensor_fallback=disabled' \
+    'm1.storage.automatic_fallback=disabled' \
+    'm1.runtime=hardware-HOLD' \
+    'm1.flight_ready=false'; do
+    key=${contract%%=*}
+    expected=${contract#*=}
+    if [[ $(manifest_value "${key}") != "${expected}" ]]; then
+      echo "Artifact Copter contract mismatch: ${contract}" >&2
       exit 1
     fi
   done
@@ -111,7 +160,8 @@ fi
 PROJECT_COMMIT=$(manifest_value project_commit)
 CURRENT_COMMIT=$(git -C "${ROOT_DIR}" rev-parse HEAD)
 if [[ ${CURRENT_COMMIT} != "${PROJECT_COMMIT}" ||
-      -n $(git -C "${ROOT_DIR}" status --porcelain) ]]; then
+      -n $(git -C "${ROOT_DIR}" status --porcelain \
+        --ignore-submodules=untracked) ]]; then
   echo "Repository HEAD/tree does not match the clean artifact." >&2
   exit 1
 fi
