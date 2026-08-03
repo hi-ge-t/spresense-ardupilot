@@ -4,11 +4,6 @@
 
 #include <AP_HAL_Empty/AP_HAL_Empty_Private.h>
 
-#if defined(__NuttX__)
-#include <fcntl.h>
-#include <unistd.h>
-#endif
-
 #include "HAL_Spresense_Class.h"
 #include "RCOutput.h"
 #include "Scheduler.h"
@@ -17,19 +12,6 @@
 #include "Util.h"
 
 namespace {
-
-#if defined(__NuttX__)
-__attribute__((constructor(101))) void trace_copter_constructors_begin()
-{
-    const int fd = open("/dev/ttyS0", O_WRONLY | O_NONBLOCK);
-    if (fd >= 0) {
-        static constexpr char message[] =
-            "SPRESENSE_M1_COPTER_BOOT=CTORS_BEGIN\n";
-        (void)write(fd, message, sizeof(message) - 1U);
-        (void)close(fd);
-    }
-}
-#endif
 
 Spresense::UARTDriver serial0_driver("/dev/ttyS0");
 Empty::UARTDriver serial1_driver;

@@ -112,6 +112,12 @@ def main() -> int:
     parser.add_argument("--port", required=True)
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument(
+        "--startup-timeout",
+        type=float,
+        default=90.0,
+        help="seconds to wait for the first Copter heartbeat",
+    )
+    parser.add_argument(
         "--artifact-dir",
         type=Path,
         default=Path("build/spresense-m1-copter-link-artifacts"),
@@ -123,6 +129,9 @@ def main() -> int:
     link = None
     try:
         from pymavlink import mavutil
+
+        if args.startup_timeout < 10.0 or args.startup_timeout > 180.0:
+            raise CheckError("startup timeout must be in the range 10..180")
 
         artifact_dir = (
             args.artifact_dir if args.artifact_dir.is_absolute()
@@ -145,7 +154,7 @@ def main() -> int:
                 value.autopilot ==
                 mavutil.mavlink.MAV_AUTOPILOT_ARDUPILOTMEGA
             ),
-            45.0,
+            args.startup_timeout,
         )
         if heartbeat.type != mavutil.mavlink.MAV_TYPE_QUADROTOR:
             raise CheckError(f"unexpected vehicle type: {heartbeat.type}")
@@ -173,6 +182,7 @@ def main() -> int:
             "captured_at": datetime.now(timezone.utc).isoformat(),
             "port": args.port,
             "baud": args.baud,
+            "startup_timeout_seconds": args.startup_timeout,
             "profile": "spresense-m1-copter-link",
             "project_commit": manifest["project_commit"],
             "image_sha256": manifest["artifact.nuttx.spk.sha256"],
