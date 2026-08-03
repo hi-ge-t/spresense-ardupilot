@@ -3,11 +3,23 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/stat.h>
+#if defined(__NuttX__)
+#include <unistd.h>
+
+extern "C" bool board_sdcard_inserted(int slotno);
+#endif
 
 namespace {
 
 constexpr uint8_t STORAGE_READY_ATTEMPTS = 31U;
 constexpr uint32_t STORAGE_READY_DELAY_US = 100000U;
+
+#if defined(__NuttX__)
+void storage_marker(const char *marker)
+{
+    (void)write(STDOUT_FILENO, marker, strlen(marker));
+}
+#endif
 
 } // namespace
 
@@ -38,6 +50,17 @@ void Spresense::Storage::init()
         }
     }
     _healthy = false;
+#if defined(__NuttX__)
+    storage_marker(board_sdcard_inserted(0)
+        ? "SPRESENSE_M1_STORAGE=CARD_PRESENT\n"
+        : "SPRESENSE_M1_STORAGE=CARD_MISSING\n");
+    storage_marker(access("/dev/mmcsd0", F_OK) == 0
+        ? "SPRESENSE_M1_STORAGE=BLOCK_PRESENT\n"
+        : "SPRESENSE_M1_STORAGE=BLOCK_MISSING\n");
+    storage_marker(access("/mnt/sd0", F_OK) == 0
+        ? "SPRESENSE_M1_STORAGE=MOUNT_PRESENT\n"
+        : "SPRESENSE_M1_STORAGE=MOUNT_MISSING\n");
+#endif
 }
 
 void Spresense::Storage::read_block(void *destination, uint16_t source, size_t size)
