@@ -195,35 +195,53 @@ void close_device(int &fd)
     }
 }
 
-void gnss_init_fail(int &fd)
+void gnss_init_marker(const char *marker)
+{
+    (void)write(STDOUT_FILENO, marker, strlen(marker));
+}
+
+void gnss_init_fail(int &fd, const char *marker)
 {
     close_device(fd);
+    gnss_init_marker(marker);
     __atomic_store_n(&gnss_init_state, GNSS_INIT_FAILED, __ATOMIC_RELEASE);
 }
 
 void *gnss_init_thread(void *)
 {
+    gnss_init_marker("SPRESENSE_M1_GNSS=THREAD\n");
     int fd = open(CONFIG_SPRESENSE_M1_COPTER_GNSS_DEVICE,
                   O_RDONLY | O_NONBLOCK);
     if (fd < 0) {
-        gnss_init_fail(fd);
+        gnss_init_fail(fd, "SPRESENSE_M1_GNSS=OPEN_FAIL\n");
         return nullptr;
     }
+    gnss_init_marker("SPRESENSE_M1_GNSS=OPEN\n");
 
     char version[CXD56_GNSS_VERSION_MAXLEN] {};
-    if (checked_ioctl(fd, CXD56_GNSS_IOCTL_WAKEUP, 0U) != 0 ||
-        checked_ioctl(fd, CXD56_GNSS_IOCTL_GET_VERSION,
-                      reinterpret_cast<unsigned long>(version)) != 0 ||
-        version[0] == '\0' ||
-        checked_ioctl(fd, CXD56_GNSS_IOCTL_START,
-                      CXD56_GNSS_STMOD_HOT) != 0) {
-        gnss_init_fail(fd);
+    if (checked_ioctl(fd, CXD56_GNSS_IOCTL_WAKEUP, 0U) != 0) {
+        gnss_init_fail(fd, "SPRESENSE_M1_GNSS=WAKE_FAIL\n");
         return nullptr;
     }
+    gnss_init_marker("SPRESENSE_M1_GNSS=WAKE\n");
+    if (checked_ioctl(fd, CXD56_GNSS_IOCTL_GET_VERSION,
+                      reinterpret_cast<unsigned long>(version)) != 0 ||
+        version[0] == '\0') {
+        gnss_init_fail(fd, "SPRESENSE_M1_GNSS=VERSION_FAIL\n");
+        return nullptr;
+    }
+    gnss_init_marker("SPRESENSE_M1_GNSS=VERSION\n");
+    if (checked_ioctl(fd, CXD56_GNSS_IOCTL_START,
+                      CXD56_GNSS_STMOD_HOT) != 0) {
+        gnss_init_fail(fd, "SPRESENSE_M1_GNSS=START_FAIL\n");
+        return nullptr;
+    }
+    gnss_init_marker("SPRESENSE_M1_GNSS=START\n");
 
     gnss_fd = fd;
     gnss_have_timestamp = false;
     __atomic_store_n(&gnss_init_state, GNSS_INIT_READY, __ATOMIC_RELEASE);
+    gnss_init_marker("SPRESENSE_M1_GNSS=READY\n");
     return nullptr;
 }
 
@@ -283,6 +301,7 @@ bool Spresense::gnss_start()
         return expected == GNSS_INIT_READY && gnss_fd >= 0;
     }
     if (!start_gnss_init_thread()) {
+        gnss_init_marker("SPRESENSE_M1_GNSS=THREAD_FAIL\n");
         __atomic_store_n(
             &gnss_init_state, GNSS_INIT_FAILED, __ATOMIC_RELEASE);
         return false;

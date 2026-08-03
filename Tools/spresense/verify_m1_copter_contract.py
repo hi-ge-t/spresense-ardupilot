@@ -161,6 +161,8 @@ def main() -> int:
             "GNSS_INIT_PRIORITY = 110",
             "gnss_init_thread",
             "start_gnss_init_thread",
+            'SPRESENSE_M1_GNSS=READY\\n',
+            'SPRESENSE_M1_GNSS=THREAD_FAIL\\n',
             "PTHREAD_EXPLICIT_SCHED",
             "SNIOC_SSAMPRATE",
             "GNSS_POLL_TIMEOUT_MS",
