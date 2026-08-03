@@ -32,7 +32,6 @@ REQUIRED_CONFIG = {
     "CONFIG_CXD56_GNSS_HEAP=y",
     "CONFIG_CXD56_SDIO=y",
     "# CONFIG_FS_AUTOMOUNTER is not set",
-    "# CONFIG_CXD56_SDCARD_AUTOMOUNT is not set",
     "CONFIG_SENSORS_CXD5602PWBIMU=y",
     "CONFIG_CXD56_CXD5602PWBIMU_SPI5_DMAC=y",
     "CONFIG_CXD56_SPI5=y",
@@ -52,6 +51,9 @@ REQUIRED_CONFIG = {
     "CONFIG_UART1_BAUD=115200",
     "CONFIG_UART1_SERIAL_CONSOLE=y",
     "# CONFIG_UART2_SERIAL_CONSOLE is not set",
+}
+FORBIDDEN_CONFIG = {
+    "CONFIG_CXD56_SDCARD_AUTOMOUNT=y",
 }
 REQUIRED_SYMBOLS = {
     "arducopter_spresense_main",
@@ -115,6 +117,11 @@ def verify_config(path: Path) -> None:
     missing = sorted(REQUIRED_CONFIG - lines)
     if missing:
         raise RuntimeError("configuration contract: " + " | ".join(missing))
+    forbidden = sorted(FORBIDDEN_CONFIG & lines)
+    if forbidden:
+        raise RuntimeError(
+            "forbidden configuration: " + " | ".join(forbidden)
+        )
 
 
 def generate_kconfig(root: Path, sdk_root: Path, env: dict[str, str]) -> None:
