@@ -19,7 +19,9 @@
     "builtin": "disabled",
     "addon": "required",
     "device": "/dev/gps2",
-    "ram": "required"
+    "ram": "required",
+    "startup_probe": "one-bounded-sample",
+    "runtime_fallback": "disabled"
   },
   "pwbimu": {
     "addon": "required",

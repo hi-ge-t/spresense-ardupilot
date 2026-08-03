@@ -20,12 +20,16 @@ The diagnostic uses the ArduPilot-pinned `ardupilotmega` MAVLink v2 definition
 and identifies as `MAV_AUTOPILOT_ARDUPILOTMEGA`/quadrotor. It sends a 1 Hz
 HEARTBEAT, answers `AUTOPILOT_VERSION`, exposes four fixed read-only diagnostic
 parameters and rejects `MAV_CMD_COMPONENT_ARM_DISARM`. The combined profile
-adds read-only `M1_IMU_REQ=1` and `M1_IMU_OK` parameters. It opens `/dev/imu0`
-read-only, configures a bounded 60 Hz diagnostic capture, reads one sample and
-stops the sensor. A failed probe leaves `M1_IMU_OK=0` and reports
-`MAV_STATE_CRITICAL`; it never enables arming or a physical output. This
-identity exists to exercise a real GCS connection; the image does not contain
-Copter control, navigation, sensor fusion or flight modes.
+adds read-only `M1_GNSS_OK`, `M1_IMU_REQ=1` and `M1_IMU_OK` parameters. It
+opens `/dev/gps2`, checks the CXD5610 firmware response, starts positioning,
+reads one bounded notification sample and stops positioning. It then opens
+`/dev/imu0` read-only, configures a bounded 60 Hz diagnostic capture, reads one
+sample and stops the sensor. A failed probe leaves the corresponding `*_OK`
+parameter at zero and reports `MAV_STATE_CRITICAL`; neither probe enables
+arming or a physical output. A GNSS sample is not evidence of a position fix,
+accuracy or timing. This identity exists to exercise a real GCS connection;
+the image does not contain Copter control, navigation, sensor fusion or flight
+modes.
 
 ## Fixed safety and platform contract
 
@@ -33,7 +37,8 @@ Copter control, navigation, sensor fusion or flight modes.
 - No actuator, PWM, DShot or CAN output backend is linked. Sony/NuttX PWM is
   disabled in the target configuration.
 - The built-in GNSS is disabled. The CXD5610 GNSS Add-on at `/dev/gps2` and
-  GNSS RAM remain mandatory profile requirements.
+  GNSS RAM remain mandatory profile requirements. The combined profile has no
+  synthetic GNSS fallback and must complete one bounded Add-on sample probe.
 - In the combined profile, Sony's CXD5602PWBIMU driver, SPI5 DMAC and
   `/dev/imu0` are mandatory. There is no synthetic sensor or runtime fallback.
 - The main-board CP2102N UART is `/dev/ttyS0` at 115200 baud. NSH, CDC-ACM and
@@ -79,6 +84,7 @@ all of these conditions hold:
 - GNSS Add-on, GNSS RAM and GNSS heap are enabled;
 - the Multi-IMU driver, `/dev/imu0`, SPI5 and SPI5 DMAC are enabled while eMMC
   is disabled;
+- the GNSS Add-on probe, `/dev/gps2` and its driver symbols are linked;
 - the main-USB serial/autostart configuration matches the fixed profile;
 - `spresense_main` is one unique strong symbol;
 - Application SRAM and GNSS RAM code/rodata/data/bss/heap boundaries are
@@ -115,16 +121,18 @@ Then run the deterministic bidirectional GCS gate:
 ```sh
 python3 Tools/spresense/m1_gcs_serial_check.py \
   --port /dev/cu.usbserial-210 \
+  --require-gnss \
   --require-pwbimu \
   --verify-arm-denied \
   --output build/spresense-m1-pwbimu-gnss-gcs-artifacts/runtime-evidence.json
 ```
 
-This gate requires an ArduPilot heartbeat, `M1PIM001` AUTOPILOT_VERSION, all
-six diagnostic parameters including `M1_IMU_OK=1`, a denied ARM
-acknowledgement and a later non-armed heartbeat. QGroundControl is opened
-separately after this gate to confirm that an installed GCS discovers the same
-vehicle.
+This gate requires an ArduPilot heartbeat, `M1PGN001` AUTOPILOT_VERSION, all
+seven diagnostic parameters including `M1_GNSS_OK=1` and `M1_IMU_OK=1`, a
+denied ARM acknowledgement and a later non-armed heartbeat. `M1_GNSS_OK=1`
+means that a bounded Add-on notification was read; it does not mean that a fix
+was obtained. QGroundControl is opened separately after this gate to confirm
+that an installed GCS discovers the same vehicle.
 
 The first hardware run was completed on 2026-08-01. The committed evidence
 summary is `docs/evidence/SPRESENSE_M1_GCS_20260801.md`; generated firmware and
@@ -146,9 +154,9 @@ combined profile. The combined profile's software-only build record is
 | Spresense boot and bidirectional serial GCS | Confirmed, one bench run | `M1GCS001`, four parameters and ARM `DENIED` on 2026-08-01 |
 | QGroundControl discovery | Confirmed, one bench run | QGroundControl 5.0.8 displayed ArduPilot / Not Ready |
 | Full Sony NuttX Copter link | HOLD | future M1 slice; this image is not Copter |
-| GNSS Add-on read in this image | HOLD | profile is configured, but this image does not read or publish GNSS data |
-| Multi-IMU startup sample | HOLD | source/cross-build PASS only; no new firmware was flashed while PX4 work owns the bench |
-| Combined Add-on coexistence | HOLD | requires a post-PX4 flash, `/dev/imu0` sample gate and GNSS device/runtime evidence |
+| GNSS Add-on bounded sample | HOLD | implementation/cross-build must be followed by `M1_GNSS_OK=1` on hardware; fix and accuracy remain separate |
+| Multi-IMU startup sample | Confirmed, one bench run | `M1PIM001`, `M1_IMU_OK=1` on 2026-08-03; combined GNSS probe image still requires a new run |
+| Combined Add-on coexistence | HOLD | requires `M1PGN001`, `M1_GNSS_OK=1` and `M1_IMU_OK=1` from the same boot |
 | Multi-IMU + final eMMC pin coexistence | HOLD | standard Multi-IMU profile uses SPI5 pins shared with eMMC; carrier design must resolve this without automatic fallback |
 | Timing, GNSS accuracy, stability and flight | HOLD/out of scope | no claim is made by this implementation |
 

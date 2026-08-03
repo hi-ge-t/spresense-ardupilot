@@ -77,7 +77,8 @@ int main(void)
     assert(heartbeat.type == MAV_TYPE_QUADROTOR);
     assert(heartbeat.autopilot == MAV_AUTOPILOT_ARDUPILOTMEGA);
     assert((heartbeat.base_mode & MAV_MODE_FLAG_SAFETY_ARMED) == 0u);
-#ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
+#if defined(CONFIG_SPRESENSE_M1_GNSS_RUNTIME_REQUIRED) || \
+    defined(CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED)
     assert(heartbeat.system_status == MAV_STATE_CRITICAL);
 #else
     assert(heartbeat.system_status == MAV_STATE_STANDBY);
@@ -101,7 +102,9 @@ int main(void)
     mavlink_msg_command_ack_decode(&messages[1], &ack);
     assert((version.flight_sw_version >> 24) == 4u);
     assert(((version.flight_sw_version >> 16) & 0xffu) == 7u);
-#ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
+#ifdef CONFIG_SPRESENSE_M1_GNSS_RUNTIME_REQUIRED
+    assert(memcmp(version.flight_custom_version, "M1PGN001", 8u) == 0);
+#elif defined(CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED)
     assert(memcmp(version.flight_custom_version, "M1PIM001", 8u) == 0);
 #else
     assert(memcmp(version.flight_custom_version, "M1GCS001", 8u) == 0);
@@ -127,10 +130,15 @@ int main(void)
 #ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
         if (index == 4u)
           {
+            assert(memcmp(parameter.param_id, "M1_GNSS_OK", 10u) == 0);
+            assert(parameter.param_value == 0.0f);
+          }
+        if (index == 5u)
+          {
             assert(memcmp(parameter.param_id, "M1_IMU_REQ", 10u) == 0);
             assert(parameter.param_value == 1.0f);
           }
-        if (index == 5u)
+        if (index == 6u)
           {
             assert(memcmp(parameter.param_id, "M1_IMU_OK", 9u) == 0);
             assert(parameter.param_value == 0.0f);
@@ -140,6 +148,16 @@ int main(void)
   }
 
 #ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
+  m1_gcs_protocol_set_gnss_ready(&protocol, 1);
+  assert(m1_gcs_protocol_send_heartbeat(&protocol) == 0);
+  count = decode_capture(&capture, messages, 8u);
+  assert(count == 1u);
+  {
+    mavlink_heartbeat_t heartbeat;
+    mavlink_msg_heartbeat_decode(&messages[0], &heartbeat);
+    assert(heartbeat.system_status == MAV_STATE_CRITICAL);
+  }
+
   m1_gcs_protocol_set_pwbimu_ready(&protocol, 1);
   assert(m1_gcs_protocol_send_heartbeat(&protocol) == 0);
   count = decode_capture(&capture, messages, 8u);
@@ -158,10 +176,14 @@ int main(void)
   count = decode_capture(&capture, messages, 8u);
   assert(count == M1_GCS_PARAMETER_COUNT);
   {
-    mavlink_param_value_t parameter;
-    mavlink_msg_param_value_decode(&messages[5], &parameter);
-    assert(memcmp(parameter.param_id, "M1_IMU_OK", 9u) == 0);
-    assert(parameter.param_value == 1.0f);
+    mavlink_param_value_t gnss_parameter;
+    mavlink_param_value_t imu_parameter;
+    mavlink_msg_param_value_decode(&messages[4], &gnss_parameter);
+    mavlink_msg_param_value_decode(&messages[6], &imu_parameter);
+    assert(memcmp(gnss_parameter.param_id, "M1_GNSS_OK", 10u) == 0);
+    assert(gnss_parameter.param_value == 1.0f);
+    assert(memcmp(imu_parameter.param_id, "M1_IMU_OK", 9u) == 0);
+    assert(imu_parameter.param_value == 1.0f);
   }
 #endif
 

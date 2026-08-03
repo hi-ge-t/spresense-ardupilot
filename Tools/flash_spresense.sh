@@ -59,6 +59,9 @@ done
 
 if [[ ${PROFILE} == spresense-m1-pwbimu-gnss-gcs ]]; then
   for contract in \
+    'm1.gnss.device=/dev/gps2' \
+    'm1.gnss.probe=one-bounded-sample' \
+    'm1.gnss.runtime=hardware-gate-required' \
     'm1.pwbimu.addon=required' \
     'm1.pwbimu.device=/dev/imu0' \
     'm1.pwbimu.probe=one-bounded-sample' \

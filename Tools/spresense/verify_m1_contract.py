@@ -19,6 +19,8 @@ EXPECTED = {
     "gnss.addon": "required",
     "gnss.device": "/dev/gps2",
     "gnss.ram": "required",
+    "gnss.startup_probe": "one-bounded-sample",
+    "gnss.runtime_fallback": "disabled",
     "pwbimu.addon": "required",
     "pwbimu.device": "/dev/imu0",
     "pwbimu.startup_probe": "one-bounded-sample",
@@ -106,6 +108,8 @@ def main() -> int:
     for required in (
         "+SPRESENSE_M1_PWBIMU_REQUIRED=y",
         "+SPRESENSE_M1_PWBIMU_DEVICE=\"/dev/imu0\"",
+        "+SPRESENSE_M1_GNSS_RUNTIME_REQUIRED=y",
+        "+SPRESENSE_M1_GNSS_DEVICE=\"/dev/gps2\"",
         "+CXD56_GNSS_ADDON=y",
         "+SENSORS_CXD5610_GNSS=y",
         "+SENSORS_CXD5602PWBIMU=y",
@@ -149,11 +153,30 @@ def main() -> int:
         if forbidden in probe_source.lower():
             failures.append(f"pwbimu-probe-output-path={forbidden}")
 
+    gnss_probe_source = (
+        gcs_root / "m1_gnss_probe.c"
+    ).read_text(encoding="utf-8")
+    for required in (
+        "CONFIG_SPRESENSE_M1_GNSS_DEVICE",
+        "CXD56_GNSS_IOCTL_GET_VERSION",
+        "CXD56_GNSS_IOCTL_START",
+        "CXD56_GNSS_IOCTL_STOP",
+        "POLLIN",
+    ):
+        if required not in gnss_probe_source:
+            failures.append(f"gnss-probe-token-missing={required}")
+    for forbidden in ("/dev/pwm", "/dev/dshot", "/dev/can"):
+        if forbidden in gnss_probe_source.lower():
+            failures.append(f"gnss-probe-output-path={forbidden}")
+
     flash_guard = (
         root / "Tools/flash_spresense.sh"
     ).read_text(encoding="utf-8")
     for required in (
         "spresense-m1-pwbimu-gnss-gcs",
+        "m1.gnss.device=/dev/gps2",
+        "m1.gnss.probe=one-bounded-sample",
+        "m1.gnss.runtime=hardware-gate-required",
         "m1.pwbimu.addon=required",
         "m1.pwbimu.device=/dev/imu0",
         "m1.pwbimu.bus=SPI5",

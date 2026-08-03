@@ -58,6 +58,8 @@ PROFILE_SPECS = {
         "config": "m1_gcs_app/pwbimu_gnss_gcs",
         "artifact_dir": "build/spresense-m1-pwbimu-gnss-gcs-artifacts",
         "required_config": BASE_REQUIRED_CONFIG | {
+            "CONFIG_SPRESENSE_M1_GNSS_RUNTIME_REQUIRED=y",
+            'CONFIG_SPRESENSE_M1_GNSS_DEVICE="/dev/gps2"',
             "CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED=y",
             'CONFIG_SPRESENSE_M1_PWBIMU_DEVICE="/dev/imu0"',
             "CONFIG_SENSORS_CXD5602PWBIMU=y",
@@ -278,7 +280,10 @@ def main() -> int:
         }
         if profile_spec["pwbimu"] == "required":
             missing_symbols = sorted(
-                (pwbimu_symbols | {"cxd5610_gnss_register"}) - symbol_names
+                (pwbimu_symbols | {
+                    "m1_gnss_probe_once",
+                    "cxd5610_gnss_register",
+                }) - symbol_names
             )
             if missing_symbols:
                 raise RuntimeError(
@@ -306,6 +311,15 @@ def main() -> int:
             "m1.gnss.addon": "required",
             "m1.gnss.device": "/dev/gps2",
             "m1.gnss.ram": "required",
+            "m1.gnss.probe": (
+                "one-bounded-sample" if profile_spec["pwbimu"] == "required"
+                else "disabled"
+            ),
+            "m1.gnss.runtime": (
+                "hardware-gate-required"
+                if profile_spec["pwbimu"] == "required"
+                else "not-required"
+            ),
             "m1.pwbimu.addon": profile_spec["pwbimu"],
             "m1.pwbimu.device": (
                 "/dev/imu0" if profile_spec["pwbimu"] == "required"

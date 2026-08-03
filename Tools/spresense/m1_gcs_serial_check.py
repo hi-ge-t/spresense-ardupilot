@@ -58,6 +58,11 @@ def main() -> int:
         action="store_true",
         help="require the Multi-IMU profile and a successful startup probe",
     )
+    parser.add_argument(
+        "--require-gnss",
+        action="store_true",
+        help="require a successful bounded GNSS Add-on startup sample",
+    )
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
     sys.path.insert(0, str(root / "modules/mavlink"))
@@ -117,7 +122,12 @@ def main() -> int:
             5.0,
         )
         custom_version = bytes(version.flight_custom_version)
-        expected_version = b"M1PIM001" if args.require_pwbimu else b"M1GCS001"
+        if args.require_gnss:
+            expected_version = b"M1PGN001"
+        elif args.require_pwbimu:
+            expected_version = b"M1PIM001"
+        else:
+            expected_version = b"M1GCS001"
         if custom_version != expected_version:
             raise CheckError(
                 f"runtime identity mismatch: {custom_version!r}"
@@ -132,6 +142,8 @@ def main() -> int:
             "M1_GNSS_RAM": 1.0,
             "M1_STAGE": 1.0,
         }
+        if args.require_gnss:
+            expected_parameters["M1_GNSS_OK"] = 1.0
         if args.require_pwbimu:
             expected_parameters.update({
                 "M1_IMU_REQ": 1.0,
@@ -152,10 +164,11 @@ def main() -> int:
             parameters[str(parameter_id)] = float(value.param_value)
         if parameters != expected_parameters:
             raise CheckError(f"parameter contract mismatch: {parameters}")
-        if (args.require_pwbimu and heartbeat.system_status !=
+        if ((args.require_pwbimu or args.require_gnss) and
+                heartbeat.system_status !=
                 mavutil.mavlink.MAV_STATE_STANDBY):
             raise CheckError(
-                f"Multi-IMU probe not ready: system_status={heartbeat.system_status}"
+                f"sensor probe not ready: system_status={heartbeat.system_status}"
             )
 
         arm_result = "not-requested"
@@ -197,7 +210,7 @@ def main() -> int:
                 raise CheckError("target became armed after denied request")
 
         evidence = {
-            "format": "spresense-m1-gcs-runtime-v1",
+            "format": "spresense-m1-gcs-runtime-v2",
             "captured_at": datetime.now(timezone.utc).isoformat(),
             "port": args.port,
             "baud": args.baud,
@@ -215,7 +228,8 @@ def main() -> int:
             "armed_observed": False,
             "physical_outputs_verified": False,
             "pwbimu_runtime_verified": args.require_pwbimu,
-            "gnss_runtime_verified": False,
+            "gnss_runtime_verified": args.require_gnss,
+            "gnss_fix_verified": False,
             "flight_verified": False,
         }
         if args.output is not None:
@@ -233,6 +247,7 @@ def main() -> int:
         "spresense_m1_gcs_serial=PASS "
         f"heartbeat=ARDUPILOTMEGA version={expected_version.decode('ascii')} "
         f"params={len(expected_parameters)} "
+        f"gnss={'PASS' if args.require_gnss else 'not-required'} "
         f"pwbimu={'PASS' if args.require_pwbimu else 'not-required'} "
         f"arm={arm_result}"
     )

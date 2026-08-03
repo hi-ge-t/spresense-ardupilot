@@ -31,6 +31,20 @@ config SPRESENSE_M1_GCS_BAUD
 	int "MAVLink baud rate"
 	default 115200
 
+config SPRESENSE_M1_GNSS_RUNTIME_REQUIRED
+	bool "Require CXD5610 GNSS Add-on diagnostic probe"
+	default n
+	depends on CXD56_GNSS_ADDON && SENSORS_CXD5610_GNSS
+	---help---
+		Require the Sony GNSS Add-on at /dev/gps2. The M1 diagnostic
+		performs one bounded positioning-notification sample during startup.
+		A sample does not imply a position fix, accuracy or timing proof.
+
+config SPRESENSE_M1_GNSS_DEVICE
+	string "CXD5610 GNSS Add-on device"
+	default "/dev/gps2"
+	depends on SPRESENSE_M1_GNSS_RUNTIME_REQUIRED
+
 config SPRESENSE_M1_PWBIMU_REQUIRED
 	bool "Require CXD5602PWBIMU diagnostic probe"
 	default n

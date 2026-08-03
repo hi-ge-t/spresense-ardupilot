@@ -19,6 +19,9 @@ CSRCS += m1_gcs_memory_layout.c
 CSRCS += m1_gcs_memory_rodata.c
 CSRCS += m1_gcs_runtime.c
 CSRCS += m1_gcs_boot.c
+ifeq ($(CONFIG_SPRESENSE_M1_GNSS_RUNTIME_REQUIRED),y)
+CSRCS += m1_gnss_probe.c
+endif
 ifeq ($(CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED),y)
 CSRCS += m1_pwbimu_probe.c
 endif

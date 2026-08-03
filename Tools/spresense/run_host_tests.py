@@ -70,7 +70,13 @@ def main() -> int:
         mavlink_headers = generate(root)
         for name, defines in (
             ("legacy", []),
-            ("pwbimu", ["-DCONFIG_SPRESENSE_M1_PWBIMU_REQUIRED=1"]),
+            (
+                "pwbimu_gnss",
+                [
+                    "-DCONFIG_SPRESENSE_M1_GNSS_RUNTIME_REQUIRED=1",
+                    "-DCONFIG_SPRESENSE_M1_PWBIMU_REQUIRED=1",
+                ],
+            ),
         ):
             gcs_binary = temporary_path / f"test_m1_gcs_protocol_{name}"
             gcs_command = [

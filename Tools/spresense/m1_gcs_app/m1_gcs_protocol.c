@@ -22,13 +22,19 @@ static const struct m1_parameter g_parameters[M1_GCS_PARAMETER_COUNT] =
   {"M1_GNSS_REQ", 1.0f},
   {"M1_GNSS_RAM", 1.0f},
   {"M1_STAGE", 1.0f},
+#ifdef CONFIG_SPRESENSE_M1_GNSS_RUNTIME_REQUIRED
+  {"M1_GNSS_OK", 0.0f},
+#endif
 #ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
   {"M1_IMU_REQ", 1.0f},
   {"M1_IMU_OK", 0.0f},
 #endif
 };
 
-#ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
+#ifdef CONFIG_SPRESENSE_M1_GNSS_RUNTIME_REQUIRED
+#define M1_GCS_GNSS_READY_PARAMETER 4u
+#define M1_GCS_PWBIMU_READY_PARAMETER 6u
+#elif defined(CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED)
 #define M1_GCS_PWBIMU_READY_PARAMETER 5u
 #endif
 
@@ -90,7 +96,10 @@ static int m1_gcs_find_parameter(const char id[16])
 
 static int m1_gcs_send_autopilot_version(struct m1_gcs_protocol *protocol)
 {
-#ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
+#ifdef CONFIG_SPRESENSE_M1_GNSS_RUNTIME_REQUIRED
+  static const uint8_t flight_custom_version[8] =
+    {'M', '1', 'P', 'G', 'N', '0', '0', '1'};
+#elif defined(CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED)
   static const uint8_t flight_custom_version[8] =
     {'M', '1', 'P', 'I', 'M', '0', '0', '1'};
 #else
@@ -278,7 +287,14 @@ void m1_gcs_protocol_receive(struct m1_gcs_protocol *protocol,
 int m1_gcs_protocol_send_heartbeat(struct m1_gcs_protocol *protocol)
 {
   mavlink_message_t message;
-#ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
+#if defined(CONFIG_SPRESENSE_M1_GNSS_RUNTIME_REQUIRED) && \
+    defined(CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED)
+  const uint8_t system_status = protocol->gnss_ready &&
+    protocol->pwbimu_ready ? MAV_STATE_STANDBY : MAV_STATE_CRITICAL;
+#elif defined(CONFIG_SPRESENSE_M1_GNSS_RUNTIME_REQUIRED)
+  const uint8_t system_status = protocol->gnss_ready ?
+    MAV_STATE_STANDBY : MAV_STATE_CRITICAL;
+#elif defined(CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED)
   const uint8_t system_status = protocol->pwbimu_ready ?
     MAV_STATE_STANDBY : MAV_STATE_CRITICAL;
 #else
@@ -294,7 +310,15 @@ int m1_gcs_protocol_send_heartbeat(struct m1_gcs_protocol *protocol)
 
 int m1_gcs_protocol_send_boot_status(struct m1_gcs_protocol *protocol)
 {
-#ifdef CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED
+#if defined(CONFIG_SPRESENSE_M1_GNSS_RUNTIME_REQUIRED) && \
+    defined(CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED)
+  static const char ready_text[50] = "SPRESENSE M1 SENSORS READY; OUTPUT DISABLED";
+  static const char hold_text[50] = "SPRESENSE M1 SENSOR HOLD; OUTPUT DISABLED";
+  const int sensors_ready = protocol->gnss_ready && protocol->pwbimu_ready;
+  const char *text = sensors_ready ? ready_text : hold_text;
+  const uint8_t severity = sensors_ready ?
+    MAV_SEVERITY_NOTICE : MAV_SEVERITY_ERROR;
+#elif defined(CONFIG_SPRESENSE_M1_PWBIMU_REQUIRED)
   static const char ready_text[50] = "SPRESENSE M1 IMU READY; OUTPUT DISABLED";
   static const char hold_text[50] = "SPRESENSE M1 IMU HOLD; OUTPUT DISABLED";
   const char *text = protocol->pwbimu_ready ? ready_text : hold_text;
@@ -310,6 +334,19 @@ int m1_gcs_protocol_send_boot_status(struct m1_gcs_protocol *protocol)
     M1_GCS_SYSTEM_ID, M1_GCS_COMPONENT_ID, &protocol->tx_status, &message,
     severity, text, 0u, 0u);
   return m1_gcs_send_message(protocol, &message);
+}
+
+void m1_gcs_protocol_set_gnss_ready(struct m1_gcs_protocol *protocol,
+                                   int ready)
+{
+#ifdef CONFIG_SPRESENSE_M1_GNSS_RUNTIME_REQUIRED
+  protocol->gnss_ready = ready != 0;
+  protocol->parameter_values[M1_GCS_GNSS_READY_PARAMETER] =
+    protocol->gnss_ready ? 1.0f : 0.0f;
+#else
+  (void)protocol;
+  (void)ready;
+#endif
 }
 
 void m1_gcs_protocol_set_pwbimu_ready(struct m1_gcs_protocol *protocol,
