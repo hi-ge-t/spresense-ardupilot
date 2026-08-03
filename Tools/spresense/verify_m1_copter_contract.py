@@ -188,12 +188,19 @@ def main() -> int:
             "nanosleep(&yield_time, &yield_time)",
             "sigtimedwait",
             "pthread_mutex_trylock(&gnss_sample_mutex)",
-            "PWBIMU_POLL_TIMEOUT_MS",
-            "ready_to_read(pwbimu_fd, PWBIMU_POLL_TIMEOUT_MS)",
+            "PWBIMU_STARTUP_POLL_TIMEOUT_MS",
+            "ready_to_read(pwbimu_fd, PWBIMU_STARTUP_POLL_TIMEOUT_MS)",
             "O_NONBLOCK",
             "return false;",
         ),
     )
+    pwbimu_read = sensor_bridge.split(
+        "Spresense::SensorReadStatus Spresense::pwbimu_read", 1
+    )[1].split("#else", 1)[0]
+    if "ready_to_read(" in pwbimu_read or "poll(" in pwbimu_read:
+        failures.append(
+            "sensor-bridge: steady-state PWBIMU read must remain nonblocking"
+        )
     gps_backend = (root / "libraries/AP_GPS/AP_GPS_Spresense.cpp").read_text(
         encoding="utf-8"
     )

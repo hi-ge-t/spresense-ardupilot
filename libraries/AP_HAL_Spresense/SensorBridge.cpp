@@ -14,7 +14,7 @@ constexpr uint16_t UNKNOWN_DOP = UINT16_MAX;
 constexpr int GNSS_NOTIFICATION_SIGNAL = 18;
 constexpr uint32_t GNSS_NOTIFICATION_WAIT_MS = 1250U;
 constexpr uint32_t GNSS_READER_YIELD_US = 1000U;
-constexpr int PWBIMU_POLL_TIMEOUT_MS = 1;
+constexpr int PWBIMU_STARTUP_POLL_TIMEOUT_MS = 1;
 #endif
 
 bool finite_position(const Spresense::GnssRawSample &raw)
@@ -560,6 +560,14 @@ bool Spresense::pwbimu_start(uint16_t sample_rate_hz)
         close_device(pwbimu_fd);
         return false;
     }
+
+    // Yield once after enabling the device so Sony's HPWORK producer can
+    // publish the initial sample during Copter setup.  Do not use poll() in
+    // the steady-state AP_InertialSensor path: the driver registers a single
+    // poll waiter while taking its device lock, and repeated setup/teardown
+    // from wait_for_sample() can block the flight-control thread.  The file
+    // remains O_NONBLOCK, so a direct read below returns EAGAIN immediately.
+    (void)ready_to_read(pwbimu_fd, PWBIMU_STARTUP_POLL_TIMEOUT_MS);
     return true;
 }
 
@@ -567,15 +575,6 @@ Spresense::SensorReadStatus Spresense::pwbimu_read(ImuSample &sample)
 {
     if (pwbimu_fd < 0) {
         return SensorReadStatus::ERROR;
-    }
-
-    // During Copter setup the scheduler's timer processes are intentionally
-    // held until setup() returns.  A bounded poll yields the high-priority
-    // main task so Sony's SPI5/DMAC driver can publish its first sample;
-    // nonblocking reads alone can otherwise starve that producer.  This is a
-    // readiness bound, not evidence for the eventual sensor-loop timing.
-    if (!ready_to_read(pwbimu_fd, PWBIMU_POLL_TIMEOUT_MS)) {
-        return SensorReadStatus::NO_DATA;
     }
 
     cxd5602pwbimu_data_t data {};
