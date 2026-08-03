@@ -7,7 +7,7 @@ namespace {
 constexpr float GRAVITY_M_S2 = 9.80665f;
 constexpr uint16_t UNKNOWN_DOP = UINT16_MAX;
 #if defined(__NuttX__)
-constexpr int GNSS_POLL_TIMEOUT_MS = 5;
+constexpr int GNSS_READER_POLL_TIMEOUT_MS = 1000;
 constexpr int PWBIMU_POLL_TIMEOUT_MS = 1;
 #endif
 
@@ -161,6 +161,10 @@ int pwbimu_fd = -1;
 bool gnss_have_timestamp;
 uint64_t gnss_last_timestamp;
 uint8_t gnss_init_state;
+pthread_mutex_t gnss_sample_mutex = PTHREAD_MUTEX_INITIALIZER;
+Spresense::GnssSample gnss_latest_sample {};
+uint32_t gnss_sample_sequence;
+uint32_t gnss_consumed_sequence;
 
 constexpr uint8_t GNSS_INIT_IDLE = 0U;
 constexpr uint8_t GNSS_INIT_STARTING = 1U;
@@ -207,6 +211,90 @@ void gnss_init_fail(int &fd, const char *marker)
     __atomic_store_n(&gnss_init_state, GNSS_INIT_FAILED, __ATOMIC_RELEASE);
 }
 
+bool publish_gnss_sample(const struct cxd56_gnss_positiondata2_s &position)
+{
+    if (gnss_have_timestamp && position.timestamp == gnss_last_timestamp) {
+        return true;
+    }
+
+    uint8_t satellites_used = 0U;
+    const uint32_t count = position.svcount < CXD56_GNSS_MAX_SV2_NUM
+        ? position.svcount : CXD56_GNSS_MAX_SV2_NUM;
+    for (uint32_t index = 0U; index < count; index++) {
+        if ((position.sv[index].stat & (1U << 1U)) != 0U &&
+            satellites_used != UINT8_MAX) {
+            satellites_used++;
+        }
+    }
+
+    const auto &receiver = position.receiver;
+    const Spresense::GnssRawSample raw {
+        position.timestamp,
+        position.status,
+        receiver.date.year,
+        receiver.date.month,
+        receiver.date.day,
+        receiver.time.hour,
+        receiver.time.minute,
+        receiver.time.sec,
+        receiver.time.usec,
+        receiver.latitude,
+        receiver.longitude,
+        receiver.altitude,
+        receiver.velocity,
+        receiver.direction,
+        receiver.up_velocity,
+        receiver.hvar,
+        receiver.vvar,
+        receiver.hvar_speed,
+        receiver.hdop,
+        receiver.vdop,
+        receiver.fix_indicator,
+        receiver.pos_fixmode,
+        receiver.vel_fixmode,
+        satellites_used,
+        receiver.pos_dataexist != 0U,
+    };
+    Spresense::GnssSample sample {};
+    if (!Spresense::convert_gnss_sample(raw, sample) ||
+        pthread_mutex_lock(&gnss_sample_mutex) != 0) {
+        return false;
+    }
+    gnss_latest_sample = sample;
+    gnss_sample_sequence++;
+    if (pthread_mutex_unlock(&gnss_sample_mutex) != 0) {
+        return false;
+    }
+    gnss_have_timestamp = true;
+    gnss_last_timestamp = position.timestamp;
+    return true;
+}
+
+void run_gnss_reader()
+{
+    bool sample_reported = false;
+    for (;;) {
+        if (!ready_to_read(gnss_fd, GNSS_READER_POLL_TIMEOUT_MS)) {
+            continue;
+        }
+
+        struct cxd56_gnss_positiondata2_s position {};
+        ssize_t length;
+        do {
+            length = read(gnss_fd, &position, sizeof(position));
+        } while (length < 0 && errno == EINTR);
+        if (length != static_cast<ssize_t>(sizeof(position)) ||
+            !publish_gnss_sample(position)) {
+            gnss_init_fail(gnss_fd, "SPRESENSE_M1_GNSS=STREAM_FAIL\n");
+            return;
+        }
+        if (!sample_reported) {
+            sample_reported = true;
+            gnss_init_marker("SPRESENSE_M1_GNSS=SAMPLE\n");
+        }
+    }
+}
+
 void *gnss_init_thread(void *)
 {
     gnss_init_marker("SPRESENSE_M1_GNSS=THREAD\n");
@@ -242,6 +330,7 @@ void *gnss_init_thread(void *)
     gnss_have_timestamp = false;
     __atomic_store_n(&gnss_init_state, GNSS_INIT_READY, __ATOMIC_RELEASE);
     gnss_init_marker("SPRESENSE_M1_GNSS=READY\n");
+    run_gnss_reader();
     return nullptr;
 }
 
@@ -311,69 +400,28 @@ bool Spresense::gnss_start()
 
 Spresense::SensorReadStatus Spresense::gnss_read(GnssSample &sample)
 {
-    // Sony's CXD5610 receiver task stays below the Copter main task so its
-    // notification stream cannot monopolise the CPU.  This bounded poll gives
-    // that producer a scheduling window without turning sensor absence into
-    // an unbounded main-loop wait.  End-to-end timing remains a hardware HOLD.
-    if (gnss_fd < 0 ||
-        !ready_to_read(gnss_fd, GNSS_POLL_TIMEOUT_MS)) {
-        return SensorReadStatus::NO_DATA;
-    }
-
-    struct cxd56_gnss_positiondata2_s position {};
-    ssize_t length;
-    do {
-        length = read(gnss_fd, &position, sizeof(position));
-    } while (length < 0 && errno == EINTR);
-    if (length != static_cast<ssize_t>(sizeof(position))) {
+    // The low-priority init thread becomes the blocking GNSS reader after the
+    // handshake.  Copter only takes a completed snapshot with trylock, so a
+    // missing notification or stalled driver cannot stop its main loop.
+    const uint8_t state = __atomic_load_n(
+        &gnss_init_state, __ATOMIC_ACQUIRE);
+    if (state == GNSS_INIT_FAILED) {
         return SensorReadStatus::ERROR;
     }
-    if (gnss_have_timestamp && position.timestamp == gnss_last_timestamp) {
+    if (state != GNSS_INIT_READY ||
+        pthread_mutex_trylock(&gnss_sample_mutex) != 0) {
         return SensorReadStatus::NO_DATA;
     }
-    gnss_have_timestamp = true;
-    gnss_last_timestamp = position.timestamp;
-
-    uint8_t satellites_used = 0U;
-    const uint32_t count = position.svcount < CXD56_GNSS_MAX_SV2_NUM
-        ? position.svcount : CXD56_GNSS_MAX_SV2_NUM;
-    for (uint32_t index = 0U; index < count; index++) {
-        if ((position.sv[index].stat & (1U << 1U)) != 0U &&
-            satellites_used != UINT8_MAX) {
-            satellites_used++;
-        }
+    if (gnss_sample_sequence == gnss_consumed_sequence) {
+        (void)pthread_mutex_unlock(&gnss_sample_mutex);
+        return SensorReadStatus::NO_DATA;
     }
-
-    const auto &receiver = position.receiver;
-    const GnssRawSample raw {
-        position.timestamp,
-        position.status,
-        receiver.date.year,
-        receiver.date.month,
-        receiver.date.day,
-        receiver.time.hour,
-        receiver.time.minute,
-        receiver.time.sec,
-        receiver.time.usec,
-        receiver.latitude,
-        receiver.longitude,
-        receiver.altitude,
-        receiver.velocity,
-        receiver.direction,
-        receiver.up_velocity,
-        receiver.hvar,
-        receiver.vvar,
-        receiver.hvar_speed,
-        receiver.hdop,
-        receiver.vdop,
-        receiver.fix_indicator,
-        receiver.pos_fixmode,
-        receiver.vel_fixmode,
-        satellites_used,
-        receiver.pos_dataexist != 0U,
-    };
-    return convert_gnss_sample(raw, sample)
-        ? SensorReadStatus::SAMPLE : SensorReadStatus::ERROR;
+    sample = gnss_latest_sample;
+    gnss_consumed_sequence = gnss_sample_sequence;
+    if (pthread_mutex_unlock(&gnss_sample_mutex) != 0) {
+        return SensorReadStatus::ERROR;
+    }
+    return SensorReadStatus::SAMPLE;
 }
 
 bool Spresense::pwbimu_start(uint16_t sample_rate_hz)
