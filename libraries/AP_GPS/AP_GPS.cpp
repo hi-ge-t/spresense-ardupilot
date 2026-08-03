@@ -44,6 +44,7 @@
 #include "AP_GPS_Spresense.h"
 #if AP_GPS_SPRESENSE_ENABLED
 #include <AP_HAL_Spresense/SensorBridge.h>
+#include <unistd.h>
 #endif
 #include "GPS_Backend.h"
 #if AP_SIM_GPS_ENABLED
@@ -665,8 +666,22 @@ AP_GPS_Backend *AP_GPS::_detect_instance(const uint8_t instance)
             // generic GPS re-detection pass.
             (void)Spresense::gnss_start();
             dstate->auto_detected_baud = false;
-            return NEW_NOTHROW AP_GPS_Spresense(
+            auto *const driver = NEW_NOTHROW AP_GPS_Spresense(
                 *this, params[instance], state[instance], nullptr);
+            static bool allocation_reported;
+            if (!allocation_reported) {
+                allocation_reported = true;
+                if (driver != nullptr) {
+                    static constexpr char marker[] =
+                        "SPRESENSE_M1_GPS_BACKEND=ALLOCATED\n";
+                    (void)write(STDOUT_FILENO, marker, sizeof(marker) - 1U);
+                } else {
+                    static constexpr char marker[] =
+                        "SPRESENSE_M1_GPS_BACKEND=ALLOC_FAIL\n";
+                    (void)write(STDOUT_FILENO, marker, sizeof(marker) - 1U);
+                }
+            }
+            return driver;
         }
         return nullptr;
 #endif

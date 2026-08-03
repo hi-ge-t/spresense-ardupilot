@@ -217,7 +217,7 @@ def main() -> int:
         (
             "case GPS_TYPE_SPRESENSE:",
             "(void)Spresense::gnss_start();",
-            "return NEW_NOTHROW AP_GPS_Spresense(",
+            "NEW_NOTHROW AP_GPS_Spresense(",
         ),
     )
     ins_backend = (
