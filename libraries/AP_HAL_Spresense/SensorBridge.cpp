@@ -375,6 +375,9 @@ void run_gnss_reader()
         if (!gnss_sample_reported) {
             gnss_sample_reported = true;
             gnss_marker("SPRESENSE_M1_GNSS=SAMPLE\n");
+            gnss_marker(sched_lockcount() == 0
+                ? "SPRESENSE_M1_GNSS=SAMPLE_LOCK_0\n"
+                : "SPRESENSE_M1_GNSS=SAMPLE_LOCK_NONZERO\n");
         }
 
         // The Add-on notification behaves like a level signal on this SDK.
@@ -427,6 +430,9 @@ void *gnss_init_thread(void *)
         return nullptr;
     }
     gnss_marker("SPRESENSE_M1_GNSS=START\n");
+    gnss_marker(sched_lockcount() == 0
+        ? "SPRESENSE_M1_GNSS=START_LOCK_0\n"
+        : "SPRESENSE_M1_GNSS=START_LOCK_NONZERO\n");
 
     gnss_fd = fd;
     gnss_have_timestamp = false;
