@@ -119,6 +119,7 @@ def main() -> int:
     implementation = "\n".join(
         path.read_text(encoding="utf-8") for path in hal_root.glob("*.cpp")
     )
+    semaphores = (hal_root / "Semaphores.h").read_text(encoding="utf-8")
     for forbidden in ("/dev/pwm", "/dev/dshot", "/dev/can"):
         if forbidden in implementation.lower():
             failures.append(f"physical-output-path={forbidden}")
@@ -140,6 +141,18 @@ def main() -> int:
             "Empty::SPIDeviceManager spi_manager",
         ),
     )
+    require_tokens(
+        failures,
+        "semaphore-abi",
+        semaphores,
+        (
+            "uint8_t _mutex_storage[28]",
+            "uint8_t _condition_storage[20]",
+            "bool _initialized = false;",
+        ),
+    )
+    if "#if defined(__NuttX__)" in semaphores:
+        failures.append("semaphore-abi-layout-is-conditional")
 
     profile = (
         root / "Tools/spresense/copter_app/configs/output_disabled/defconfig"

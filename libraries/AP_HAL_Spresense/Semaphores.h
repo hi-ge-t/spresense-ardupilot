@@ -4,10 +4,6 @@
 #include <AP_HAL/AP_HAL_Macros.h>
 #include <AP_HAL/Semaphores.h>
 
-#if defined(__NuttX__)
-#include <pthread.h>
-#endif
-
 #include "AP_HAL_Spresense_Namespace.h"
 
 class Spresense::Semaphore : public AP_HAL::Semaphore {
@@ -20,12 +16,12 @@ public:
     bool take_nonblocking() override;
 
 private:
-#if defined(__NuttX__)
-    pthread_mutex_t _mutex {};
+    // Keep the class layout identical in the Waf vehicle archive and the
+    // Sony NuttX application.  The archive is compiled without __NuttX__, so
+    // placing pthread_mutex_t here would create two incompatible ABIs.
+    alignas(uint32_t) uint8_t _mutex_storage[28] {};
     bool _initialized = false;
-#else
     bool _taken = false;
-#endif
 };
 
 class Spresense::BinarySemaphore : public AP_HAL::BinarySemaphore {
@@ -39,12 +35,11 @@ public:
     void signal_ISR() override;
 
 private:
-#if defined(__NuttX__)
-    pthread_mutex_t _mutex {};
-    pthread_cond_t _condition {};
+    // Sony NuttX 7fd61b2c: pthread_mutex_t=28 bytes,
+    // pthread_cond_t=20 bytes, both aligned to 4 bytes.  Opaque storage keeps
+    // the vehicle and application sides ABI-compatible.
+    alignas(uint32_t) uint8_t _mutex_storage[28] {};
+    alignas(uint32_t) uint8_t _condition_storage[20] {};
     bool _pending = false;
     bool _initialized = false;
-#else
-    bool _pending = false;
-#endif
 };
