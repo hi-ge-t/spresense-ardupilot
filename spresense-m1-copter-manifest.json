@@ -56,6 +56,7 @@
   "storage": {
     "development": "microSD",
     "development_path": "/mnt/sd0/APM/ardupilot.stg",
+    "mount_policy": "explicit-fixed-device",
     "final_candidate": "eMMC",
     "automatic_fallback": "disabled",
     "pwbimu_emmc_coexistence": "hardware-design-HOLD"
