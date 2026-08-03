@@ -186,6 +186,7 @@ bool pwbimu_sample_after_gnss_reported;
 bool pwbimu_eagain_after_gnss_reported;
 bool pwbimu_first_empty_after_gnss_reported;
 bool pwbimu_empty_count_after_gnss_reported;
+bool pwbimu_irq_rearm_reported;
 uint32_t pwbimu_eagain_after_gnss_count;
 uint32_t pwbimu_empty_after_gnss_count;
 constexpr uint8_t GNSS_INIT_IDLE = 0U;
@@ -658,6 +659,15 @@ Spresense::SensorReadStatus Spresense::pwbimu_read(ImuSample &sample)
             !pwbimu_empty_count_after_gnss_reported) {
             pwbimu_empty_count_after_gnss_reported = true;
             gnss_marker("SPRESENSE_M1_PWBIMU=EMPTY_100\n");
+            gnss_marker(board_gpio_read(PIN_EMMC_DATA3) != 0
+                ? "SPRESENSE_M1_PWBIMU=EMPTY_100_DRDY_HIGH\n"
+                : "SPRESENSE_M1_PWBIMU=EMPTY_100_DRDY_LOW\n");
+        }
+        if (!pwbimu_irq_rearm_reported &&
+            pwbimu_empty_after_gnss_count >= 100U) {
+            pwbimu_irq_rearm_reported = true;
+            board_gpio_int(PIN_EMMC_DATA3, true);
+            gnss_marker("SPRESENSE_M1_PWBIMU=IRQ_REARMED\n");
         }
     }
     if (length < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
