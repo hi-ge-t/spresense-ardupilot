@@ -105,8 +105,26 @@ void Spresense::HAL_Spresense::run(
     console->printf("SPRESENSE_M1_COPTER_BOOT=LOOP\n");
     console->flush();
 
+    uint8_t loop_trace_count = 0U;
     for (;;) {
+        if (loop_trace_count == 0U) {
+            console->printf("SPRESENSE_M1_COPTER_LOOP=CALL_1\n");
+            console->flush();
+        } else if (loop_trace_count == 1U) {
+            console->printf("SPRESENSE_M1_COPTER_LOOP=CALL_2\n");
+            console->flush();
+        }
         callbacks->loop();
+        if (loop_trace_count == 0U) {
+            console->printf("SPRESENSE_M1_COPTER_LOOP=RETURN_1\n");
+            console->flush();
+        } else if (loop_trace_count == 1U) {
+            console->printf("SPRESENSE_M1_COPTER_LOOP=RETURN_2\n");
+            console->flush();
+        }
+        if (loop_trace_count < 2U) {
+            loop_trace_count++;
+        }
     }
 }
 
