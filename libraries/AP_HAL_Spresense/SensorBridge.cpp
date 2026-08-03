@@ -165,6 +165,9 @@ pthread_mutex_t gnss_sample_mutex = PTHREAD_MUTEX_INITIALIZER;
 Spresense::GnssSample gnss_latest_sample {};
 uint32_t gnss_sample_sequence;
 uint32_t gnss_consumed_sequence;
+bool gnss_attach_reported;
+bool gnss_read_reported;
+bool gnss_consumed_reported;
 
 constexpr uint8_t GNSS_INIT_IDLE = 0U;
 constexpr uint8_t GNSS_INIT_STARTING = 1U;
@@ -377,6 +380,10 @@ bool Spresense::gnss_start()
     const uint8_t state = __atomic_load_n(
         &gnss_init_state, __ATOMIC_ACQUIRE);
     if (state == GNSS_INIT_READY) {
+        if (!gnss_attach_reported) {
+            gnss_attach_reported = true;
+            gnss_init_marker("SPRESENSE_M1_GNSS=ATTACH\n");
+        }
         return gnss_fd >= 0;
     }
     if (state == GNSS_INIT_STARTING || state == GNSS_INIT_FAILED) {
@@ -405,6 +412,10 @@ Spresense::SensorReadStatus Spresense::gnss_read(GnssSample &sample)
     // missing notification or stalled driver cannot stop its main loop.
     const uint8_t state = __atomic_load_n(
         &gnss_init_state, __ATOMIC_ACQUIRE);
+    if (!gnss_read_reported) {
+        gnss_read_reported = true;
+        gnss_init_marker("SPRESENSE_M1_GNSS=READ\n");
+    }
     if (state == GNSS_INIT_FAILED) {
         return SensorReadStatus::ERROR;
     }
@@ -420,6 +431,10 @@ Spresense::SensorReadStatus Spresense::gnss_read(GnssSample &sample)
     gnss_consumed_sequence = gnss_sample_sequence;
     if (pthread_mutex_unlock(&gnss_sample_mutex) != 0) {
         return SensorReadStatus::ERROR;
+    }
+    if (!gnss_consumed_reported) {
+        gnss_consumed_reported = true;
+        gnss_init_marker("SPRESENSE_M1_GNSS=CONSUMED\n");
     }
     return SensorReadStatus::SAMPLE;
 }
