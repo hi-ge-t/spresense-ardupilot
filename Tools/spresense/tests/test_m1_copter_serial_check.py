@@ -53,6 +53,10 @@ def main() -> int:
         b"SPRESENSE_M1_GNSS=CONSUMED\n"
     )
     checker.require_runtime_markers(diagnostics)
+    expect(
+        checker.missing_runtime_markers(diagnostics) == [],
+        "complete runtime marker set is reported",
+    )
     try:
         checker.require_runtime_markers(
             bytearray(b"SPRESENSE_M1_COPTER_BOOT=LOOP\n")

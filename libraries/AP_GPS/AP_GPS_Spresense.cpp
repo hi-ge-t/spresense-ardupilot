@@ -7,22 +7,8 @@
 #include <AP_HAL_Spresense/SensorBridge.h>
 #include <AP_Math/AP_Math.h>
 
-#include <string.h>
-#include <unistd.h>
-
 bool AP_GPS_Spresense::read()
 {
-    static uint8_t read_trace_count;
-    static const char *const markers[] = {
-        "SPRESENSE_M1_GPS_BACKEND=READ_1\n",
-        "SPRESENSE_M1_GPS_BACKEND=READ_2\n",
-        "SPRESENSE_M1_GPS_BACKEND=READ_3\n",
-    };
-    if (read_trace_count < ARRAY_SIZE(markers)) {
-        const char *const marker = markers[read_trace_count++];
-        (void)write(STDOUT_FILENO, marker, strlen(marker));
-    }
-
     if (!Spresense::gnss_start()) {
         _healthy = false;
         return false;

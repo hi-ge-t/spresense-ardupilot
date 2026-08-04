@@ -25,14 +25,6 @@ constexpr uint32_t IO_PERIOD_US = 10000U;
 constexpr size_t TIMER_STACK_BYTES = 8192U;
 constexpr size_t IO_STACK_BYTES = 8192U;
 constexpr size_t THREAD_STACK_MARGIN_BYTES = 2048U;
-bool main_sample_wait_begin_reported;
-bool main_sample_wait_return_reported;
-
-void scheduler_marker(const char *marker)
-{
-    (void)write(STDOUT_FILENO, marker, strlen(marker));
-}
-
 int clamp_priority(int priority)
 {
     return std::max(SCHED_PRIORITY_MIN,
@@ -155,18 +147,8 @@ void Spresense::Scheduler::delay(uint16_t delay_ms)
 
 void Spresense::Scheduler::delay_microseconds(uint16_t delay_us)
 {
-    const bool trace_sample_wait = initialized() && in_main_thread() &&
-        delay_us == 100U && !main_sample_wait_return_reported;
-    if (trace_sample_wait && !main_sample_wait_begin_reported) {
-        main_sample_wait_begin_reported = true;
-        scheduler_marker("SPRESENSE_M1_SCHEDULER=SAMPLE_WAIT_BEGIN\n");
-    }
     if (!_clock.delay_microseconds(delay_us)) {
         mark_unhealthy();
-    }
-    if (trace_sample_wait && !main_sample_wait_return_reported) {
-        main_sample_wait_return_reported = true;
-        scheduler_marker("SPRESENSE_M1_SCHEDULER=SAMPLE_WAIT_RETURN\n");
     }
 }
 

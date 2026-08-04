@@ -112,6 +112,16 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def verify_embedded_commit(path: Path, project_commit: str) -> None:
+    short_commit = project_commit[:8]
+    marker = f"ArduCopter V4.7.0 ({short_commit})".encode("ascii")
+    if marker not in path.read_bytes():
+        raise RuntimeError(
+            "firmware version does not match project commit: "
+            f"expected {short_commit}"
+        )
+
+
 def verify_config(path: Path) -> None:
     lines = set(path.read_text(encoding="utf-8").splitlines())
     missing = sorted(REQUIRED_CONFIG - lines)
@@ -295,7 +305,10 @@ def main() -> int:
             env=env,
         )
         if arguments.reuse_build:
-            for required in (archive, libraries, nuttx / ".config"):
+            for required in (
+                root / "build/c4che/_cache.py",
+                nuttx / ".config",
+            ):
                 if not required.is_file():
                     raise RuntimeError(f"reused build input is missing: {required}")
         else:
@@ -306,18 +319,21 @@ def main() -> int:
                 cwd=root,
                 env=env,
             )
-            run(
-                [python, root / "waf", "copter", "--targets",
-                 "bin/arducopter", f"-j{arguments.jobs}"],
-                cwd=root,
-                env=env,
-            )
             generate_kconfig(root, sdk_root, env)
             run(
                 [sys.executable, "tools/config.py", "default", CONFIG],
                 cwd=sdk,
                 env=env,
             )
+        # Even a reuse build must refresh the vehicle archive: the embedded
+        # ArduPilot version contains the project commit and is part of the
+        # runtime/artifact identity guard.
+        run(
+            [python, root / "waf", "copter", "--targets",
+             "bin/arducopter", f"-j{arguments.jobs}"],
+            cwd=root,
+            env=env,
+        )
         verify_config(nuttx / ".config")
 
         libgcc = compiler_library(
@@ -377,6 +393,7 @@ def main() -> int:
         for source in sources.values():
             if not source.is_file():
                 raise RuntimeError(f"build output is missing: {source}")
+        verify_embedded_commit(sources["nuttx"], project_commit)
         artifact_dir.mkdir(parents=True, exist_ok=True)
         for name, source in sources.items():
             shutil.copy2(source, artifact_dir / name)

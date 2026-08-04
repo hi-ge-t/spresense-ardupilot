@@ -1246,19 +1246,16 @@ ParametersG2::ParametersG2(void) :
 void Copter::load_parameters(void)
 {
     AP_Vehicle::load_parameters(g.format_version, Parameters::k_format_version);
-    hal.console->printf("SPRESENSE_M1_COPTER_PARAMS=VEHICLE_AFTER\n");
 
     // PARAMETER_CONVERSION - Added: Mar-2022
 #if AP_FENCE_ENABLED
     AP_Param::convert_class(g.k_param_fence_old, &fence, fence.var_info, 0, true);
 #endif
-    hal.console->printf("SPRESENSE_M1_COPTER_PARAMS=FENCE_AFTER\n");
 
     // PARAMETER_CONVERSION - Added: July-2025 for ArduPilot-4.7
 #if AP_RPM_ENABLED
     AP_Param::convert_class(g.k_param_rpm_sensor_old, &rpm_sensor, rpm_sensor.var_info, 0, true, true);
 #endif
-    hal.console->printf("SPRESENSE_M1_COPTER_PARAMS=RPM_AFTER\n");
 
     static const AP_Param::G2ObjectConversion g2_conversions[] {
 #if AP_STATS_ENABLED
@@ -1276,13 +1273,11 @@ void Copter::load_parameters(void)
     };
 
     AP_Param::convert_g2_objects(&g2, g2_conversions, ARRAY_SIZE(g2_conversions));
-    hal.console->printf("SPRESENSE_M1_COPTER_PARAMS=G2_AFTER\n");
 
     // PARAMETER_CONVERSION - Added: Feb-2024 for Copter-4.6
 #if HAL_LOGGING_ENABLED
     AP_Param::convert_class(g.k_param_logger, &logger, logger.var_info, 0, true);
 #endif
-    hal.console->printf("SPRESENSE_M1_COPTER_PARAMS=LOGGER_AFTER\n");
 
     static const AP_Param::TopLevelObjectConversion toplevel_conversions[] {
 #if AP_SERIALMANAGER_ENABLED
@@ -1292,7 +1287,6 @@ void Copter::load_parameters(void)
     };
 
     AP_Param::convert_toplevel_objects(toplevel_conversions, ARRAY_SIZE(toplevel_conversions));
-    hal.console->printf("SPRESENSE_M1_COPTER_PARAMS=TOPLEVEL_AFTER\n");
 
 #if HAL_GCS_ENABLED
     // Move parameters into new MAV_ parameter namespace
@@ -1307,29 +1301,24 @@ void Copter::load_parameters(void)
         AP_Param::convert_old_parameters(&gcs_conversion_info[0], ARRAY_SIZE(gcs_conversion_info));
     }
 #endif  // HAL_GCS_ENABLED
-    hal.console->printf("SPRESENSE_M1_COPTER_PARAMS=GCS_AFTER\n");
 
 #if MODE_RTL_ENABLED
     // convert RTL parameters
     copter.mode_rtl.convert_params();
 #endif
-    hal.console->printf("SPRESENSE_M1_COPTER_PARAMS=RTL_AFTER\n");
 
     // convert LAND parameters
     copter.mode_land.convert_params();
-    hal.console->printf("SPRESENSE_M1_COPTER_PARAMS=LAND_AFTER\n");
 
 #if MODE_POSHOLD_ENABLED
     // convert PosHold parameters
     copter.mode_poshold.convert_params();
 #endif
-    hal.console->printf("SPRESENSE_M1_COPTER_PARAMS=POSHOLD_AFTER\n");
 
 #if AP_AVOIDANCE_ENABLED
     // convert AC_Avoid parameters
     copter.avoid.convert_params();
 #endif
-    hal.console->printf("SPRESENSE_M1_COPTER_PARAMS=AVOID_AFTER\n");
 
     // convert PILOT vertical speed and acceleration parameters
     // PARAMETER_CONVERSION - Added: Feb 2026 for ardupilot-4.7
@@ -1342,11 +1331,9 @@ void Copter::load_parameters(void)
         };
         AP_Param::convert_old_parameters_scaled(pilot_conversion_info, ARRAY_SIZE(pilot_conversion_info), 0.01, 0);
     }
-    hal.console->printf("SPRESENSE_M1_COPTER_PARAMS=PILOT_AFTER\n");
 
     // setup AP_Param frame type flags
     AP_Param::set_frame_type_flags(AP_PARAM_FRAME_COPTER);
-    hal.console->printf("SPRESENSE_M1_COPTER_PARAMS=DONE\n");
 }
 
 // handle conversion of PID gains

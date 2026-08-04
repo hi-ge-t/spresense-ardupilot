@@ -142,6 +142,12 @@ def main() -> int:
         check=True,
     )
     subprocess.run(
+        [sys.executable,
+         str(root / "Tools/spresense/tests/test_m1_copter_build_guard.py")],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(
         [sys.executable, "-m", "py_compile",
          str(root / "Tools/spresense/build_m1_copter_firmware.py"),
          str(root / "Tools/spresense/m1_copter_serial_check.py"),

@@ -146,7 +146,7 @@ def reset_target(port: str, baud: int) -> None:
         raise CheckError(f"DTR reset failed: {error}") from error
 
 
-def require_runtime_markers(diagnostics: bytearray) -> None:
+def missing_runtime_markers(diagnostics: bytearray) -> list[str]:
     required = (
         b"SPRESENSE_M1_COPTER_BOOT=LOOP",
         b"SPRESENSE_M1_PWBIMU=SAMPLE",
@@ -154,12 +154,24 @@ def require_runtime_markers(diagnostics: bytearray) -> None:
         b"SPRESENSE_M1_GNSS=ATTACH",
         b"SPRESENSE_M1_GNSS=CONSUMED",
     )
-    missing = [
+    return [
         marker.decode("ascii") for marker in required
         if marker not in diagnostics
     ]
+
+
+def require_runtime_markers(diagnostics: bytearray) -> None:
+    missing = missing_runtime_markers(diagnostics)
     if missing:
         raise CheckError("runtime marker missing: " + " | ".join(missing))
+
+
+def wait_runtime_markers(link, diagnostics: bytearray, timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    while missing_runtime_markers(diagnostics) and time.monotonic() < deadline:
+        message = link.recv_match(blocking=True, timeout=0.5)
+        capture_bad_data(message, diagnostics)
+    require_runtime_markers(diagnostics)
 
 
 def require_runtime_identity(diagnostics: bytearray, project_commit: str) -> str:
@@ -332,6 +344,12 @@ def main() -> int:
         help="seconds to wait for both Copter heartbeat and HAL LOOP marker",
     )
     parser.add_argument(
+        "--sensor-timeout",
+        type=float,
+        default=120.0,
+        help="seconds to wait for GNSS and PWBIMU runtime markers",
+    )
+    parser.add_argument(
         "--artifact-dir",
         type=Path,
         default=Path("build/spresense-m1-copter-link-artifacts"),
@@ -347,6 +365,8 @@ def main() -> int:
 
         if args.startup_timeout < 30.0 or args.startup_timeout > 240.0:
             raise CheckError("startup timeout must be in the range 30..240")
+        if args.sensor_timeout < 30.0 or args.sensor_timeout > 240.0:
+            raise CheckError("sensor timeout must be in the range 30..240")
 
         artifact_dir = (
             args.artifact_dir if args.artifact_dir.is_absolute()
@@ -392,6 +412,7 @@ def main() -> int:
             target_component,
             diagnostics,
         )
+        wait_runtime_markers(link, diagnostics, args.sensor_timeout)
         normal_result = request_arm(
             link, mavutil.mavlink, target_system, target_component, 0,
             diagnostics,
@@ -400,14 +421,13 @@ def main() -> int:
             link, mavutil.mavlink, target_system, target_component, 2989,
             diagnostics,
         )
-        require_runtime_markers(diagnostics)
-
         evidence = {
             "format": "spresense-m1-copter-runtime-v2",
             "captured_at": datetime.now(timezone.utc).isoformat(),
             "port": args.port,
             "baud": args.baud,
             "startup_timeout_seconds": args.startup_timeout,
+            "sensor_timeout_seconds": args.sensor_timeout,
             "reset_dtr": args.reset_dtr,
             "profile": "spresense-m1-copter-link",
             "project_commit": manifest["project_commit"],
@@ -434,6 +454,16 @@ def main() -> int:
             "pwbimu_driver_linked": True,
             "pwbimu_runtime_verified": True,
             "pwbimu_sample_marker_received": True,
+            "pwbimu_recovery_attempted": (
+                b"SPRESENSE_M1_PWBIMU=RESTART_OK" in diagnostics or
+                b"SPRESENSE_M1_PWBIMU=RESTART_FAIL" in diagnostics
+            ),
+            "pwbimu_recovery_succeeded": (
+                b"SPRESENSE_M1_PWBIMU=RESTART_OK" in diagnostics
+            ),
+            "pwbimu_recovery_exhausted": (
+                b"SPRESENSE_M1_PWBIMU=RECOVERY_EXHAUSTED" in diagnostics
+            ),
             "pwbimu_first_time_usec": int(first_imu.time_usec),
             "pwbimu_second_time_usec": int(second_imu.time_usec),
             "pwbimu_first_axes": [int(value) for value in (

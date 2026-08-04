@@ -185,7 +185,6 @@ uint32_t pwbimu_sample_sequence;
 uint32_t pwbimu_consumed_sequence;
 uint8_t pwbimu_stream_state;
 bool pwbimu_sample_reported;
-uint32_t pwbimu_reader_sample_count;
 constexpr uint8_t GNSS_INIT_IDLE = 0U;
 constexpr uint8_t GNSS_INIT_STARTING = 1U;
 constexpr uint8_t GNSS_INIT_READY = 2U;
@@ -201,6 +200,7 @@ constexpr uint8_t PWBIMU_STREAM_FAILED = 3U;
 constexpr int PWBIMU_READER_PRIORITY = 185;
 constexpr size_t PWBIMU_READER_STACK_BYTES = 4096U;
 constexpr int PWBIMU_POLL_TIMEOUT_MS = 1000;
+constexpr uint8_t PWBIMU_MAX_RESTARTS = 1U;
 
 enum class GnssWaitStatus : uint8_t {
     NOTIFIED,
@@ -380,9 +380,6 @@ void run_gnss_reader()
         if (!gnss_sample_reported) {
             gnss_sample_reported = true;
             gnss_marker("SPRESENSE_M1_GNSS=SAMPLE\n");
-            gnss_marker(sched_lockcount() == 0
-                ? "SPRESENSE_M1_GNSS=SAMPLE_LOCK_0\n"
-                : "SPRESENSE_M1_GNSS=SAMPLE_LOCK_NONZERO\n");
         }
 
         // The Add-on notification behaves like a level signal on this SDK.
@@ -421,7 +418,6 @@ void *gnss_init_thread(void *)
         return nullptr;
     }
     gnss_marker("SPRESENSE_M1_GNSS=VERSION\n");
-    gnss_marker("SPRESENSE_M1_GNSS=SIGNAL_BEGIN\n");
     if (!block_gnss_notification() ||
         !configure_gnss_notification(fd, true)) {
         gnss_init_fail(fd, "SPRESENSE_M1_GNSS=SIGNAL_FAIL\n");
@@ -435,9 +431,6 @@ void *gnss_init_thread(void *)
         return nullptr;
     }
     gnss_marker("SPRESENSE_M1_GNSS=START\n");
-    gnss_marker(sched_lockcount() == 0
-        ? "SPRESENSE_M1_GNSS=START_LOCK_0\n"
-        : "SPRESENSE_M1_GNSS=START_LOCK_NONZERO\n");
 
     gnss_fd = fd;
     gnss_have_timestamp = false;
@@ -504,7 +497,7 @@ void *pwbimu_reader_thread(void *)
     __atomic_store_n(
         &pwbimu_stream_state, PWBIMU_STREAM_READY, __ATOMIC_RELEASE);
     struct pollfd descriptor {pwbimu_fd, POLLIN, 0};
-    bool timeout_reported = false;
+    uint8_t restart_attempts = 0U;
     for (;;) {
         descriptor.revents = 0;
         int poll_result;
@@ -513,33 +506,32 @@ void *pwbimu_reader_thread(void *)
         } while (poll_result < 0 && errno == EINTR);
         if (poll_result == 0 ||
             (poll_result > 0 && (descriptor.revents & POLLIN) == 0)) {
-            if (!timeout_reported) {
-                timeout_reported = true;
-                int mode = 0;
-                bool filter = false;
-                bool enabled = false;
-                (void)board_gpio_intstatus(
-                    PIN_EMMC_DATA3, &mode, &filter, &enabled);
-                gnss_marker("SPRESENSE_M1_PWBIMU=POLL_TIMEOUT\n");
-                gnss_marker(board_gpio_read(PIN_EMMC_DATA3) != 0
-                    ? "SPRESENSE_M1_PWBIMU=DRDY_HIGH\n"
-                    : "SPRESENSE_M1_PWBIMU=DRDY_LOW\n");
-                gnss_marker(enabled
-                    ? "SPRESENSE_M1_PWBIMU=IRQ_ENABLED\n"
-                    : "SPRESENSE_M1_PWBIMU=IRQ_DISABLED\n");
+            gnss_marker("SPRESENSE_M1_PWBIMU=POLL_TIMEOUT\n");
+            if (restart_attempts >= PWBIMU_MAX_RESTARTS) {
+                gnss_marker("SPRESENSE_M1_PWBIMU=RECOVERY_EXHAUSTED\n");
+                __atomic_store_n(
+                    &pwbimu_stream_state, PWBIMU_STREAM_FAILED,
+                    __ATOMIC_RELEASE);
+                return nullptr;
             }
-            // Sony's level-triggered driver disables DRDY while HPWORK drains
-            // the FIFO. GNSS startup also shares I2C0 with the PWBIMU control
-            // plane, so restart sensing and re-arm DRDY only after a full
-            // second without data. This does not touch any actuator path.
+            // GNSS startup shares I2C0 with the PWBIMU control plane. Recover
+            // a missed DRDY service window once after a full second without
+            // data. This is sensor-only and does not touch any actuator path.
             const bool restarted =
                 checked_ioctl(pwbimu_fd, SNIOC_ENABLE, 0U) == 0 &&
-                checked_ioctl(pwbimu_fd, SNIOC_ENABLE, 1U) == 0;
+                checked_ioctl(pwbimu_fd, SNIOC_ENABLE, 1U) == 0 &&
+                board_gpio_int(PIN_EMMC_DATA3, false) == 0 &&
+                board_gpio_int(PIN_EMMC_DATA3, true) == 0;
+            restart_attempts++;
             gnss_marker(restarted
                 ? "SPRESENSE_M1_PWBIMU=RESTART_OK\n"
                 : "SPRESENSE_M1_PWBIMU=RESTART_FAIL\n");
-            (void)board_gpio_int(PIN_EMMC_DATA3, false);
-            (void)board_gpio_int(PIN_EMMC_DATA3, true);
+            if (!restarted) {
+                __atomic_store_n(
+                    &pwbimu_stream_state, PWBIMU_STREAM_FAILED,
+                    __ATOMIC_RELEASE);
+                return nullptr;
+            }
             continue;
         }
         if (poll_result < 0) {
@@ -569,18 +561,6 @@ void *pwbimu_reader_thread(void *)
         if (!pwbimu_sample_reported) {
             pwbimu_sample_reported = true;
             gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE\n");
-        }
-        pwbimu_reader_sample_count++;
-        if (pwbimu_reader_sample_count == 60U) {
-            gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE_60\n");
-        } else if (pwbimu_reader_sample_count == 61U) {
-            gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE_61\n");
-        } else if (pwbimu_reader_sample_count == 120U) {
-            gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE_120\n");
-        } else if (pwbimu_reader_sample_count == 600U) {
-            gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE_600\n");
-        } else if (pwbimu_reader_sample_count == 1200U) {
-            gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE_1200\n");
         }
     }
 }

@@ -1,20 +1,5 @@
 #include "Copter.h"
 #include <AP_ESC_Telem/AP_ESC_Telem.h>
-#if CONFIG_HAL_BOARD == HAL_BOARD_SPRESENSE
-#include <string.h>
-#include <unistd.h>
-
-namespace {
-
-void spresense_init_marker(const char *marker)
-{
-    (void)write(STDOUT_FILENO, marker, strlen(marker));
-}
-
-} // namespace
-#else
-static void spresense_init_marker(const char *) {}
-#endif
 
 /*****************************************************************************
 *   The init_ardupilot function processes everything we need for an in - air restart
@@ -30,7 +15,6 @@ static void failsafe_check_static()
 
 void Copter::init_ardupilot()
 {
-    spresense_init_marker("SPRESENSE_M1_INIT=START\n");
     // init winch
 #if AP_WINCH_ENABLED
     g2.winch.init();
@@ -39,7 +23,6 @@ void Copter::init_ardupilot()
     // initialise notify system
     notify.init();
     notify_flight_mode();
-    spresense_init_marker("SPRESENSE_M1_INIT=NOTIFY_AFTER\n");
 
     // initialise battery monitor
     battery.init();
@@ -50,11 +33,9 @@ void Copter::init_ardupilot()
 #endif
 
     barometer.init();
-    spresense_init_marker("SPRESENSE_M1_INIT=BARO_INIT_AFTER\n");
 
     // setup telem slots with serial ports
     gcs().setup_uarts();
-    spresense_init_marker("SPRESENSE_M1_INIT=GCS_UARTS_AFTER\n");
 
 #if OSD_ENABLED
     osd.init();
@@ -72,7 +53,6 @@ void Copter::init_ardupilot()
 #endif
 
     init_rc_in();               // sets up rc channels from radio
-    spresense_init_marker("SPRESENSE_M1_INIT=RC_IN_AFTER\n");
 
 #if AP_RANGEFINDER_ENABLED
     // initialise surface to be tracked in SurfaceTracking
@@ -82,7 +62,6 @@ void Copter::init_ardupilot()
 
     // allocate the motors class
     allocate_motors();
-    spresense_init_marker("SPRESENSE_M1_INIT=MOTORS_AFTER\n");
 
     // initialise rc channels including setting mode
     rc().convert_options(RC_Channel::AUX_FUNC::ARMDISARM_UNUSED, RC_Channel::AUX_FUNC::ARMDISARM_AIRMODE);
@@ -90,7 +69,6 @@ void Copter::init_ardupilot()
 
     // sets up motors and output to escs
     init_rc_out();
-    spresense_init_marker("SPRESENSE_M1_INIT=RC_OUT_AFTER\n");
 
     // check if we should enter esc calibration mode
     esc_calibration_startup_check();
@@ -107,16 +85,13 @@ void Copter::init_ardupilot()
      *  the RC library being initialised.
      */
     hal.scheduler->register_timer_failsafe(failsafe_check_static, 1000);
-    spresense_init_marker("SPRESENSE_M1_INIT=FAILSAFE_AFTER\n");
 
     // Do GPS init
     gps.set_log_gps_bit(MASK_LOG_GPS);
     gps.init();
-    spresense_init_marker("SPRESENSE_M1_INIT=GPS_AFTER\n");
 
     AP::compass().set_log_bit(MASK_LOG_COMPASS);
     AP::compass().init();
-    spresense_init_marker("SPRESENSE_M1_INIT=COMPASS_AFTER\n");
 
 #if AP_AIRSPEED_ENABLED
     airspeed.set_log_bit(MASK_LOG_IMU);
@@ -160,9 +135,7 @@ void Copter::init_ardupilot()
     // read Baro pressure at ground
     //-----------------------------
     barometer.set_log_baro_bit(MASK_LOG_IMU);
-    spresense_init_marker("SPRESENSE_M1_INIT=BARO_CAL_BEFORE\n");
     barometer.calibrate();
-    spresense_init_marker("SPRESENSE_M1_INIT=BARO_CAL_AFTER\n");
 
 #if AP_RANGEFINDER_ENABLED
     // initialise rangefinder
@@ -197,9 +170,7 @@ void Copter::init_ardupilot()
     logger.setVehicle_Startup_Writer(FUNCTOR_BIND(&copter, &Copter::Log_Write_Vehicle_Startup_Messages, void));
 #endif
 
-    spresense_init_marker("SPRESENSE_M1_INIT=INS_BEFORE\n");
     startup_INS_ground();
-    spresense_init_marker("SPRESENSE_M1_INIT=INS_AFTER\n");
 
 #if AC_CUSTOMCONTROL_MULTI_ENABLED
     custom_control.init();
@@ -227,7 +198,6 @@ void Copter::init_ardupilot()
 
     // flag that initialisation has completed
     ap.initialised = true;
-    spresense_init_marker("SPRESENSE_M1_INIT=DONE\n");
 }
 
 
@@ -392,7 +362,6 @@ bool Copter::should_log(uint32_t mask)
  */
 void Copter::allocate_motors(void)
 {
-    spresense_init_marker("SPRESENSE_M1_MOTORS=START\n");
     switch ((AP_Motors::motor_frame_class)g2.frame_class.get()) {
 #if FRAME_CONFIG != HELI_FRAME
         case AP_Motors::MOTOR_FRAME_QUAD:
@@ -462,15 +431,12 @@ void Copter::allocate_motors(void)
     if (motors == nullptr) {
         AP_BoardConfig::allocation_error("FRAME_CLASS=%u", (unsigned)g2.frame_class.get());
     }
-    spresense_init_marker("SPRESENSE_M1_MOTORS=MOTORS_NEW_AFTER\n");
     AP_Param::load_object_from_eeprom(motors, motors_var_info);
-    spresense_init_marker("SPRESENSE_M1_MOTORS=MOTORS_PARAMS_AFTER\n");
 
     ahrs_view = ahrs.create_view(ROTATION_NONE);
     if (ahrs_view == nullptr) {
         AP_BoardConfig::allocation_error("AP_AHRS_View");
     }
-    spresense_init_marker("SPRESENSE_M1_MOTORS=AHRS_VIEW_AFTER\n");
 
 #if FRAME_CONFIG != HELI_FRAME
     if ((AP_Motors::motor_frame_class)g2.frame_class.get() == AP_Motors::MOTOR_FRAME_6DOF_SCRIPTING) {
@@ -489,17 +455,13 @@ void Copter::allocate_motors(void)
     if (attitude_control == nullptr) {
         AP_BoardConfig::allocation_error("AttitudeControl");
     }
-    spresense_init_marker("SPRESENSE_M1_MOTORS=ATTITUDE_NEW_AFTER\n");
     AP_Param::load_object_from_eeprom(attitude_control, attitude_control_var_info);
-    spresense_init_marker("SPRESENSE_M1_MOTORS=ATTITUDE_PARAMS_AFTER\n");
         
     pos_control = NEW_NOTHROW AC_PosControl(*ahrs_view, *motors, *attitude_control);
     if (pos_control == nullptr) {
         AP_BoardConfig::allocation_error("PosControl");
     }
-    spresense_init_marker("SPRESENSE_M1_MOTORS=POS_NEW_AFTER\n");
     AP_Param::load_object_from_eeprom(pos_control, pos_control->var_info);
-    spresense_init_marker("SPRESENSE_M1_MOTORS=POS_PARAMS_AFTER\n");
 
 #if AP_OAPATHPLANNER_ENABLED
     wp_nav = NEW_NOTHROW AC_WPNav_OA(*ahrs_view, *pos_control, *attitude_control);
@@ -509,17 +471,13 @@ void Copter::allocate_motors(void)
     if (wp_nav == nullptr) {
         AP_BoardConfig::allocation_error("WPNav");
     }
-    spresense_init_marker("SPRESENSE_M1_MOTORS=WPNAV_NEW_AFTER\n");
     AP_Param::load_object_from_eeprom(wp_nav, wp_nav->var_info);
-    spresense_init_marker("SPRESENSE_M1_MOTORS=WPNAV_PARAMS_AFTER\n");
 
     loiter_nav = NEW_NOTHROW AC_Loiter(*ahrs_view, *pos_control, *attitude_control);
     if (loiter_nav == nullptr) {
         AP_BoardConfig::allocation_error("LoiterNav");
     }
-    spresense_init_marker("SPRESENSE_M1_MOTORS=LOITER_NEW_AFTER\n");
     AP_Param::load_object_from_eeprom(loiter_nav, loiter_nav->var_info);
-    spresense_init_marker("SPRESENSE_M1_MOTORS=LOITER_PARAMS_AFTER\n");
 
 #if MODE_CIRCLE_ENABLED
     circle_nav = NEW_NOTHROW AC_Circle(*ahrs_view, *pos_control);
@@ -531,7 +489,6 @@ void Copter::allocate_motors(void)
 
     // reload lines from the defaults file that may now be accessible
     AP_Param::reload_defaults_file(true);
-    spresense_init_marker("SPRESENSE_M1_MOTORS=DEFAULTS_AFTER\n");
     
     // now setup some frame-class specific defaults
     switch ((AP_Motors::motor_frame_class)g2.frame_class.get()) {
@@ -549,18 +506,14 @@ void Copter::allocate_motors(void)
     default:
         break;
     }
-    spresense_init_marker("SPRESENSE_M1_MOTORS=FRAME_DEFAULTS_AFTER\n");
 
     // brushed 16kHz defaults to 16kHz pulses
     if (motors->is_brushed_pwm_type()) {
         g.rc_speed.set_default(16000);
     }
-    spresense_init_marker("SPRESENSE_M1_MOTORS=BRUSHED_AFTER\n");
     
     // upgrade parameters. This must be done after allocating the objects
-    spresense_init_marker("SPRESENSE_M1_MOTORS=PID_CONVERT_BEFORE\n");
     convert_pid_parameters();
-    spresense_init_marker("SPRESENSE_M1_MOTORS=PID_CONVERT_AFTER\n");
 #if FRAME_CONFIG == HELI_FRAME
     motors->heli_motors_param_conversions();
 #endif
@@ -571,35 +524,23 @@ void Copter::allocate_motors(void)
 #endif
 
     // upgrade attitude controller parameters
-    spresense_init_marker("SPRESENSE_M1_MOTORS=ATTITUDE_CONVERT_BEFORE\n");
     copter.attitude_control->convert_parameters();
-    spresense_init_marker("SPRESENSE_M1_MOTORS=ATTITUDE_CONVERT_AFTER\n");
 
     // upgrade position controller parameters
-    spresense_init_marker("SPRESENSE_M1_MOTORS=POS_CONVERT_BEFORE\n");
     copter.pos_control->convert_parameters();
-    spresense_init_marker("SPRESENSE_M1_MOTORS=POS_CONVERT_AFTER\n");
 
     // convert wp_nav parameters
-    spresense_init_marker("SPRESENSE_M1_MOTORS=WPNAV_CONVERT_BEFORE\n");
     copter.wp_nav->convert_parameters();
-    spresense_init_marker("SPRESENSE_M1_MOTORS=WPNAV_CONVERT_AFTER\n");
 
     // upgrade loiter navigation parameters
-    spresense_init_marker("SPRESENSE_M1_MOTORS=LOITER_CONVERT_BEFORE\n");
     loiter_nav->convert_parameters();
-    spresense_init_marker("SPRESENSE_M1_MOTORS=LOITER_CONVERT_AFTER\n");
 
 #if MODE_CIRCLE_ENABLED
-    spresense_init_marker("SPRESENSE_M1_MOTORS=CIRCLE_CONVERT_BEFORE\n");
     circle_nav->convert_parameters();
-    spresense_init_marker("SPRESENSE_M1_MOTORS=CIRCLE_CONVERT_AFTER\n");
 #endif
 
     // param count could have changed
-    spresense_init_marker("SPRESENSE_M1_MOTORS=INVALIDATE_BEFORE\n");
     AP_Param::invalidate_count();
-    spresense_init_marker("SPRESENSE_M1_MOTORS=DONE\n");
 }
 
 bool Copter::is_tradheli() const
