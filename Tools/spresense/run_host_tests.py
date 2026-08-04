@@ -185,6 +185,7 @@ def main() -> int:
          str(root / "Tools/spresense/m1_copter_serial_check.py"),
          str(root / "Tools/spresense/m1_rover_gcs_sequence.py"),
          str(root / "Tools/spresense/m1_rover_serial_check.py"),
+         str(root / "Tools/spresense/run_m1_rover_gcs_sitl.py"),
          str(root / "Tools/spresense/run_m1_rover_sitl_autonomy.py"),
          str(root / "Tools/spresense/verify_m1_copter_map.py"),
          str(root / "Tools/spresense/verify_m1_rover_contract.py")],

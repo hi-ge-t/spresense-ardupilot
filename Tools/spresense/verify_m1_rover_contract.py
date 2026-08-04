@@ -248,6 +248,9 @@ def main() -> int:
             "mission_request_list_send",
             "mission_count_send",
             "mission_item_int_send",
+            "MISSION_REQUEST_INT",
+            "is_primary_mission_message",
+            "MAV_MISSION_TYPE_MISSION",
             "MAV_CMD_DO_SET_MODE",
             "MAVLINK_MSG_ID_SERVO_OUTPUT_RAW",
             "GCS_RUNTIME_MARKERS",
@@ -269,6 +272,26 @@ def main() -> int:
             '"mission_complete_verified": True',
             '"spresense_hardware_verified": False',
             '"driving_verified": False',
+        ),
+    )
+
+    gcs_sitl_sequence = (
+        root / "Tools/spresense/run_m1_rover_gcs_sitl.py"
+    ).read_text(encoding="utf-8")
+    require_tokens(
+        failures,
+        "gcs-sitl-sequence",
+        gcs_sitl_sequence,
+        (
+            "real-Rover-SITL-MAVLink-mission-round-trip",
+            "MAV_COMP_ID_MISSIONPLANNER",
+            '"auto_mode_entered_disarmed": auto_entered',
+            '"arm_command_sent": False',
+            '"spresense_hardware_verified": False',
+            '"physical_outputs_verified": False',
+            '"driving_verified": False',
+            '"project_tree": git_tree_state(root)',
+            "initial_state_restored",
         ),
     )
 

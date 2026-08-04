@@ -192,7 +192,25 @@ def mission_item_from_message(message):
     )
 
 
-def send_mission_item(link, system, component, item):
+def is_primary_mission_message(message, mavlink):
+    return int(getattr(
+        message,
+        "mission_type",
+        mavlink.MAV_MISSION_TYPE_MISSION,
+    )) == mavlink.MAV_MISSION_TYPE_MISSION
+
+
+def send_mission_item(
+    link, mavlink, system, component, item, request_type
+):
+    if request_type not in {"MISSION_REQUEST", "MISSION_REQUEST_INT"}:
+        raise common.CheckError(
+            f"unsupported mission request type: {request_type}"
+        )
+    del mavlink
+    # Always retain integer coordinates. ArduPilot accepts MISSION_ITEM_INT in
+    # response to its legacy MISSION_REQUEST and this avoids float32 rounding
+    # when an existing mission is restored.
     link.mav.mission_item_int_send(
         system,
         component,
@@ -226,7 +244,8 @@ def download_mission(link, mavlink, system, component, diagnostics):
         if (
             message is not None and
             message.get_type() == "MISSION_COUNT" and
-            message.get_srcSystem() == system
+            message.get_srcSystem() == system and
+            is_primary_mission_message(message, mavlink)
         ):
             count_message = message
             break
@@ -250,6 +269,7 @@ def download_mission(link, mavlink, system, component, diagnostics):
                 message is not None and
                 message.get_type() in {"MISSION_ITEM", "MISSION_ITEM_INT"} and
                 message.get_srcSystem() == system and
+                is_primary_mission_message(message, mavlink) and
                 int(message.seq) == seq
             ):
                 item_message = message
@@ -266,7 +286,10 @@ def clear_mission(link, mavlink, system, component, diagnostics):
     acknowledgement = receive_message(
         link,
         {"MISSION_ACK"},
-        lambda value: value.get_srcSystem() == system,
+        lambda value: (
+            value.get_srcSystem() == system and
+            is_primary_mission_message(value, mavlink)
+        ),
         10.0,
         diagnostics,
     )
@@ -299,17 +322,26 @@ def upload_mission(link, mavlink, system, component, items, diagnostics):
             continue
         if (
             message.get_type() in {"MISSION_REQUEST", "MISSION_REQUEST_INT"} and
-            message.get_srcSystem() == system
+            message.get_srcSystem() == system and
+            is_primary_mission_message(message, mavlink)
         ):
             seq = int(message.seq)
             if seq < 0 or seq >= len(items):
                 raise common.CheckError(f"target requested invalid mission item {seq}")
-            send_mission_item(link, system, component, items[seq])
+            send_mission_item(
+                link,
+                mavlink,
+                system,
+                component,
+                items[seq],
+                message.get_type(),
+            )
             sent.add(seq)
             continue
         if (
             message.get_type() == "MISSION_ACK" and
-            message.get_srcSystem() == system
+            message.get_srcSystem() == system and
+            is_primary_mission_message(message, mavlink)
         ):
             if message.type != mavlink.MAV_MISSION_ACCEPTED:
                 raise common.CheckError(
@@ -321,36 +353,56 @@ def upload_mission(link, mavlink, system, component, items, diagnostics):
     raise common.CheckError("timeout waiting for mission upload acknowledgement")
 
 
-def missions_equal(expected, actual):
+def mission_difference(expected, actual):
     if len(expected) != len(actual):
-        return False
-    for left, right in zip(expected, actual):
-        if (
-            left.seq != right.seq or
-            left.frame != right.frame or
-            left.command != right.command or
-            left.current != right.current or
-            left.autocontinue != right.autocontinue or
-            left.x != right.x or
-            left.y != right.y
+        return f"count expected={len(expected)} actual={len(actual)}"
+    for index, (left, right) in enumerate(zip(expected, actual)):
+        if index == 0:
+            if left.seq != 0 or right.seq != 0:
+                return (
+                    "dynamic HOME sequence mismatch "
+                    f"expected={left.seq!r} actual={right.seq!r}"
+                )
+            if left.command != right.command:
+                return (
+                    "dynamic HOME command mismatch "
+                    f"expected={left.command!r} actual={right.command!r}"
+                )
+            continue
+        for field in (
+            "seq",
+            "frame",
+            "command",
+            "autocontinue",
+            "x",
+            "y",
         ):
-            return False
-        for left_value, right_value in (
-            (left.param1, right.param1),
-            (left.param2, right.param2),
-            (left.param3, right.param3),
-            (left.param4, right.param4),
-            (left.z, right.z),
-        ):
+            left_value = getattr(left, field)
+            right_value = getattr(right, field)
+            if left_value != right_value:
+                return (
+                    f"item={index} field={field} "
+                    f"expected={left_value!r} actual={right_value!r}"
+                )
+        for field in ("param1", "param2", "param3", "param4", "z"):
+            left_value = getattr(left, field)
+            right_value = getattr(right, field)
             if not math.isclose(left_value, right_value, abs_tol=1.0e-3):
-                return False
-    return True
+                return (
+                    f"item={index} field={field} "
+                    f"expected={left_value!r} actual={right_value!r}"
+                )
+    return None
+
+
+def missions_equal(expected, actual):
+    return mission_difference(expected, actual) is None
 
 
 def build_dry_run_mission(mavlink, latitude_e7, longitude_e7):
     return [
         MissionItem(
-            0, mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,
+            0, mavlink.MAV_FRAME_GLOBAL,
             mavlink.MAV_CMD_NAV_WAYPOINT, 0, 1,
             0.0, 0.0, 0.0, 0.0, latitude_e7, longitude_e7, 0.0,
         ),
@@ -360,7 +412,7 @@ def build_dry_run_mission(mavlink, latitude_e7, longitude_e7):
             0.0, 1.0, -1.0, 0.0, 0, 0, 0.0,
         ),
         MissionItem(
-            2, mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,
+            2, mavlink.MAV_FRAME_GLOBAL,
             mavlink.MAV_CMD_NAV_WAYPOINT, 0, 1,
             0.0, 0.0, 0.0, 0.0,
             latitude_e7 + 450, longitude_e7 + 450, 0.0,
