@@ -16,6 +16,15 @@ import time
 import m1_copter_serial_check as common
 
 
+GCS_RUNTIME_MARKERS = (
+    b"SPRESENSE_M1_ROVER_BOOT=LOOP",
+    b"SPRESENSE_M1_OUTPUT=SHADOW_ONLY",
+    b"SPRESENSE_M1_OUTPUT=WRITE_REJECTED",
+)
+DRY_RUN_LATITUDE_E7 = 400713770
+DRY_RUN_LONGITUDE_E7 = -1052297900
+
+
 @dataclass(frozen=True)
 class MissionItem:
     seq: int
@@ -47,6 +56,51 @@ def receive_message(link, message_types, predicate, timeout, diagnostics):
     raise common.CheckError(
         "timeout waiting for " + "/".join(sorted(message_types))
     )
+
+
+def wait_gcs_runtime_markers(link, diagnostics, timeout):
+    deadline = time.monotonic() + timeout
+    while (
+        any(marker not in diagnostics for marker in GCS_RUNTIME_MARKERS) and
+        time.monotonic() < deadline
+    ):
+        message = link.recv_match(blocking=True, timeout=0.5)
+        common.capture_bad_data(message, diagnostics)
+    missing = [
+        marker.decode("ascii") for marker in GCS_RUNTIME_MARKERS
+        if marker not in diagnostics
+    ]
+    if missing:
+        raise common.CheckError(
+            "GCS runtime marker missing: " + " | ".join(missing)
+        )
+
+
+def optional_gnss_snapshot(
+    link, mavlink, system, component, diagnostics
+):
+    try:
+        common.request_message(
+            link,
+            mavlink,
+            system,
+            component,
+            mavlink.MAVLINK_MSG_ID_GPS_RAW_INT,
+            diagnostics,
+        )
+        return common.wait_requested_message(
+            link,
+            mavlink,
+            system,
+            component,
+            mavlink.MAVLINK_MSG_ID_GPS_RAW_INT,
+            "GPS_RAW_INT",
+            lambda value: value.get_srcSystem() == system,
+            5.0,
+            diagnostics,
+        )
+    except common.CheckError:
+        return None
 
 
 def mission_item_from_message(message):
@@ -391,33 +445,20 @@ def main():
         forced_arm = common.request_arm(
             link, mavutil.mavlink, system, component, 2989, diagnostics
         )
-        common.wait_runtime_markers(link, diagnostics, 120.0, "rover")
-
-        common.request_message(
-            link,
-            mavutil.mavlink,
-            system,
-            component,
-            mavutil.mavlink.MAVLINK_MSG_ID_GPS_RAW_INT,
-            diagnostics,
-        )
-        gps = common.wait_requested_message(
-            link,
-            mavutil.mavlink,
-            system,
-            component,
-            mavutil.mavlink.MAVLINK_MSG_ID_GPS_RAW_INT,
-            "GPS_RAW_INT",
-            lambda value: value.get_srcSystem() == system,
-            30.0,
-            diagnostics,
+        wait_gcs_runtime_markers(link, diagnostics, 30.0)
+        gps = optional_gnss_snapshot(
+            link, mavutil.mavlink, system, component, diagnostics
         )
 
         backup = download_mission(
             link, mavutil.mavlink, system, component, diagnostics
         )
+        latitude_e7 = int(gps.lat) if gps is not None else DRY_RUN_LATITUDE_E7
+        longitude_e7 = (
+            int(gps.lon) if gps is not None else DRY_RUN_LONGITUDE_E7
+        )
         test_mission = build_dry_run_mission(
-            mavutil.mavlink, int(gps.lat), int(gps.lon)
+            mavutil.mavlink, latitude_e7, longitude_e7
         )
         mission_modified = True
         upload_mission(
@@ -504,7 +545,8 @@ def main():
             "autonomous_motion_verified": False,
             "autonomous_mission_completion_verified": False,
             "sitl_autonomy_sequence_required": True,
-            "gnss_fix_type": int(gps.fix_type),
+            "gnss_snapshot_received": gps is not None,
+            "gnss_fix_type": int(gps.fix_type) if gps is not None else None,
             "gnss_accuracy_verified": False,
         }
         if args.output is not None:

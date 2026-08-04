@@ -144,6 +144,9 @@ class FakeLink:
 def main():
     mavlink = FakeMavlink()
     diagnostics = bytearray()
+    if any(b"GNSS" in marker or b"PWBIMU" in marker
+           for marker in sequence.GCS_RUNTIME_MARKERS):
+        raise AssertionError("GCS protocol gate must not claim sensor runtime")
     original = sequence.build_dry_run_mission(
         mavlink, 400713770, -1052297900
     )
@@ -161,6 +164,8 @@ def main():
         raise AssertionError("test mission must not depend on current-item coercion")
     if replacement[1].frame != mavlink.MAV_FRAME_GLOBAL:
         raise AssertionError("DO_CHANGE_SPEED must use ArduPilot's stored frame")
+    if sequence.missions_equal(original, replacement):
+        raise AssertionError("dry-run coordinate fallback did not change mission")
     sequence.upload_mission(link, mavlink, 1, 1, replacement, diagnostics)
     round_trip = sequence.download_mission(
         link, mavlink, 1, 1, diagnostics

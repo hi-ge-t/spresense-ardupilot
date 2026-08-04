@@ -250,6 +250,8 @@ def main() -> int:
             "mission_item_int_send",
             "MAV_CMD_DO_SET_MODE",
             "MAVLINK_MSG_ID_SERVO_OUTPUT_RAW",
+            "GCS_RUNTIME_MARKERS",
+            "gnss_snapshot_received",
             "mission_restored",
             '"autonomous_motion_verified": False',
         ),
