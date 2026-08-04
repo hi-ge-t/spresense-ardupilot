@@ -235,10 +235,31 @@ def main() -> int:
         (
             "SERVO1_FUNCTION=26",
             "SERVO3_FUNCTION=70",
-            "TODO: 未確認",
+            "evidence/SPRESENSE_M1_ROVER_20260804.md",
+            "CH1=1800, CH3=1700 dry-run",
+            "GNSS fix/accuracy HOLD",
             "no automatic device, sensor or storage fallback",
             "HAL_SPRESENSE_OUTPUT_DISABLED=1",
             "It does not mean the car can be driven yet.",
+        ),
+    )
+
+    evidence = (
+        root / "docs/evidence/SPRESENSE_M1_ROVER_20260804.md"
+    ).read_text(encoding="utf-8")
+    require_tokens(
+        failures,
+        "hardware-evidence",
+        evidence,
+        (
+            "a200430c9ae191b9234fcdee318151a99f1b1037",
+            "8b225f139959c709cda0adb61e14729bb0ac5198",
+            "ed66ab9c347e4436e05177dca756dd09fbd639ab77798af00201e7f1ca67237a",
+            "MAV_TYPE_GROUND_ROVER",
+            "CH1=1800",
+            "CH3=1700",
+            "explicitly a no-fix result",
+            "not driving evidence",
         ),
     )
 

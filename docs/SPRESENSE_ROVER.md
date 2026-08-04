@@ -5,7 +5,10 @@
 This profile links the full ArduRover 4.7.0 vehicle archive to the existing
 output-disabled `AP_HAL_Spresense`. It targets a conventional four-wheel RC
 car with front steering and rear-wheel throttle. It is a software and
-output-disabled hardware feasibility artifact, not drive-ready firmware.
+output-disabled hardware feasibility artifact, not drive-ready firmware. One
+combined-board hardware gate has passed with Multi-IMU and GNSS Add-on
+connected; the retained evidence is
+[Spresense M1 Rover evidence](evidence/SPRESENSE_M1_ROVER_20260804.md).
 
 The selected upstream frame path is the standard ArduRover regular frame:
 
@@ -124,18 +127,18 @@ width, ESC behavior, steering direction, vehicle geometry or motion.
 
 | Item | Current evidence | Status |
 |---|---|---|
-| Full Rover archive and regular frame path | host contract plus Sony cross-build | required before commit |
-| Application/GNSS RAM boundaries | linker-map verifier and JSON report | required before commit |
-| Built-in GNSS/PWM/eMMC exclusion | Kconfig, symbol and artifact guards | required before commit |
-| Rover boot and ground-rover heartbeat | combined-board runtime gate | `TODO: 未確認` until saved |
-| GNSS/PWBIMU live in Rover | combined-board runtime gate | `TODO: 未確認` until saved |
-| Normal/forced arm denial | combined-board runtime gate | `TODO: 未確認` until saved |
-| MANUAL_CONTROL to CH1/CH3 override | combined-board dry-run gate | `TODO: 未確認` until saved |
-| Physical write count | reject-only implementation and no backend | physical measurement HOLD |
+| Full Rover archive and regular frame path | host contract plus Sony cross-build | PASS at `a200430c` |
+| Application/GNSS RAM boundaries | linker-map verifier and JSON report | PASS |
+| Built-in GNSS/PWM/eMMC exclusion | Kconfig, symbol and artifact guards | PASS |
+| Rover boot and ground-rover heartbeat | 2026-08-04 combined-board runtime gate | PASS |
+| GNSS/PWBIMU live in Rover | sample consumed plus changing RAW_IMU | PASS; GNSS fix/accuracy HOLD |
+| Normal/forced arm denial | both returned `MAV_RESULT_FAILED` | PASS |
+| MANUAL_CONTROL to CH1/CH3 override | CH1=1800, CH3=1700 dry-run | PASS for input path only |
+| Physical write count | reject-only implementation and no backend | software guard PASS; electrical HOLD |
 | Steering servo direction/range/neutral | no servo signal connected | HOLD |
 | ESC neutral/brake/reverse/failsafe | no ESC signal connected | HOLD |
 | Wheel geometry and control tuning | no moving vehicle test | HOLD |
-| GNSS accuracy and timing margins | not measured by this gate | HOLD |
+| GNSS fix/accuracy and timing margins | runtime fix type 1; not measured | HOLD |
 | Driving safety or autonomy | out of scope | HOLD |
 
 Passing the output-disabled gate means ArduRover can boot and process a normal

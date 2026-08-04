@@ -15,8 +15,10 @@
 >
 > A separate output-disabled ArduRover artifact now links the full Rover 4.7.0
 > archive for a conventional front-steering vehicle: CH1/GroundSteering and
-> CH3/Throttle. It accepts MAVLink manual-control input only as a dry-run,
-> rejects normal and forced arming, and has no physical PWM/CAN backend. See
+> CH3/Throttle. A combined Multi-IMU/GNSS Add-on hardware gate confirmed the
+> ground-rover heartbeat, live sensor ingestion, CH1/CH3 dry-run mapping and
+> normal/forced arming rejection. It has no physical PWM/CAN backend; GNSS fix,
+> steering/ESC signals, driving and control performance remain HOLD. See
 > [Spresense regular-front-steering Rover](docs/SPRESENSE_ROVER.md).
 
 [![Discord](https://img.shields.io/discord/674039678562861068.svg)](https://ardupilot.org/discord)
