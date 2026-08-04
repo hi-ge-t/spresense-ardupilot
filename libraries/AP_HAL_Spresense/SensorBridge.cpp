@@ -144,11 +144,14 @@ bool Spresense::convert_imu_sample(const ImuRawSample &raw,
 
 #if defined(__NuttX__)
 
+#include <arch/board/board.h>
 #include <arch/chip/gnss.h>
+#include <arch/chip/pin.h>
 #include <nuttx/sensors/cxd5602pwbimu.h>
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <pthread.h>
 #include <sched.h>
 #include <signal.h>
@@ -197,6 +200,7 @@ constexpr uint8_t PWBIMU_STREAM_READY = 2U;
 constexpr uint8_t PWBIMU_STREAM_FAILED = 3U;
 constexpr int PWBIMU_READER_PRIORITY = 185;
 constexpr size_t PWBIMU_READER_STACK_BYTES = 4096U;
+constexpr int PWBIMU_POLL_TIMEOUT_MS = 1000;
 
 enum class GnssWaitStatus : uint8_t {
     NOTIFIED,
@@ -499,12 +503,54 @@ void *pwbimu_reader_thread(void *)
 {
     __atomic_store_n(
         &pwbimu_stream_state, PWBIMU_STREAM_READY, __ATOMIC_RELEASE);
+    struct pollfd descriptor {pwbimu_fd, POLLIN, 0};
+    bool timeout_reported = false;
     for (;;) {
+        descriptor.revents = 0;
+        int poll_result;
+        do {
+            poll_result = poll(&descriptor, 1, PWBIMU_POLL_TIMEOUT_MS);
+        } while (poll_result < 0 && errno == EINTR);
+        if (poll_result == 0 ||
+            (poll_result > 0 && (descriptor.revents & POLLIN) == 0)) {
+            if (!timeout_reported) {
+                timeout_reported = true;
+                int mode = 0;
+                bool filter = false;
+                bool enabled = false;
+                (void)board_gpio_intstatus(
+                    PIN_EMMC_DATA3, &mode, &filter, &enabled);
+                gnss_marker("SPRESENSE_M1_PWBIMU=POLL_TIMEOUT\n");
+                gnss_marker(board_gpio_read(PIN_EMMC_DATA3) != 0
+                    ? "SPRESENSE_M1_PWBIMU=DRDY_HIGH\n"
+                    : "SPRESENSE_M1_PWBIMU=DRDY_LOW\n");
+                gnss_marker(enabled
+                    ? "SPRESENSE_M1_PWBIMU=IRQ_ENABLED\n"
+                    : "SPRESENSE_M1_PWBIMU=IRQ_DISABLED\n");
+            }
+            // Sony's level-triggered driver disables DRDY while HPWORK drains
+            // the FIFO. Re-arm it only after a full second without data so a
+            // missed completion cannot leave the sensor path permanently off.
+            (void)board_gpio_int(PIN_EMMC_DATA3, false);
+            (void)board_gpio_int(PIN_EMMC_DATA3, true);
+            continue;
+        }
+        if (poll_result < 0) {
+            gnss_marker("SPRESENSE_M1_PWBIMU=POLL_FAIL\n");
+            __atomic_store_n(
+                &pwbimu_stream_state, PWBIMU_STREAM_FAILED,
+                __ATOMIC_RELEASE);
+            return nullptr;
+        }
+
         cxd5602pwbimu_data_t data {};
         ssize_t length;
         do {
             length = read(pwbimu_fd, &data, sizeof(data));
         } while (length < 0 && errno == EINTR);
+        if (length < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            continue;
+        }
         if (length != static_cast<ssize_t>(sizeof(data)) ||
             !publish_pwbimu_sample(data)) {
             gnss_marker("SPRESENSE_M1_PWBIMU=STREAM_FAIL\n");
@@ -520,6 +566,10 @@ void *pwbimu_reader_thread(void *)
         pwbimu_reader_sample_count++;
         if (pwbimu_reader_sample_count == 60U) {
             gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE_60\n");
+        } else if (pwbimu_reader_sample_count == 61U) {
+            gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE_61\n");
+        } else if (pwbimu_reader_sample_count == 120U) {
+            gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE_120\n");
         } else if (pwbimu_reader_sample_count == 600U) {
             gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE_600\n");
         } else if (pwbimu_reader_sample_count == 1200U) {
@@ -643,7 +693,7 @@ bool Spresense::pwbimu_start(uint16_t sample_rate_hz)
         return false;
     }
     pwbimu_fd = open(CONFIG_SPRESENSE_M1_COPTER_PWBIMU_DEVICE,
-                     O_RDONLY);
+                     O_RDONLY | O_NONBLOCK);
     if (pwbimu_fd < 0) {
         gnss_marker("SPRESENSE_M1_PWBIMU=OPEN_FAILED\n");
         return false;
