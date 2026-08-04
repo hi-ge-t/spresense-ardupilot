@@ -279,9 +279,10 @@ def main() -> int:
             raise RuntimeError(
                 f"MAVLink submodule commit mismatch: {mavlink_commit}"
             )
-        dirty = bool(git_value(
+        project_tree_state = git_value(
             root, "status", "--porcelain", "--ignore-submodules=untracked"
-        ))
+        )
+        dirty = bool(project_tree_state)
         if dirty and not arguments.allow_dirty:
             raise RuntimeError(
                 "worktree is dirty; commit first or use --allow-dirty for a "
@@ -407,15 +408,15 @@ def main() -> int:
             )
 
         final_project_commit = git_value(root, "rev-parse", "HEAD")
-        final_dirty = bool(git_value(
+        final_project_tree_state = git_value(
             root, "status", "--porcelain", "--ignore-submodules=untracked"
-        ))
+        )
         if final_project_commit != project_commit:
             raise RuntimeError(
                 "project commit changed during build: "
                 f"{project_commit} -> {final_project_commit}"
             )
-        if final_dirty != dirty:
+        if final_project_tree_state != project_tree_state:
             raise RuntimeError("project tree state changed during build")
 
         memory = json.loads(map_report.read_text(encoding="utf-8"))
