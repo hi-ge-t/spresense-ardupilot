@@ -16,7 +16,7 @@ vehicle-driving evidence.
 
 ## Reproducible identities
 
-- current software/test commit: `b455243f80f1906cd9d2fe77273f019f09bc9add`
+- tested software commit: `28a899ebae4b81c659378aa5561763ced58a6cba`
 - flashed hardware artifact commit: `31a5aaddb177a54e5bedee9f0a6cd351aea361f9`
 - upstream Rover baseline: `1511f27194f1dcc3728270883047bdf022b3fd53`
 - Sony SDK commit: `7fd61b2c03f06a4ff0302b84c755e58c338788b2`
@@ -26,10 +26,10 @@ vehicle-driving evidence.
 - flashed `nuttx.spk` SHA-256:
   `ead174956de5a15486279026b9ae15ae992ec0fb81546489de001aa496bce6ab`
 
-The firmware artifact predates the final two test-tool hardening commits. Those
-commits modify host-side GCS recovery logic only; the installed target image is
-therefore identified separately and is not represented as a `b455243f80`
-hardware build.
+The firmware artifact predates the later test-tool hardening and SITL runner
+commits. Those commits modify host-side GCS transaction and test logic only;
+the installed target image is therefore identified separately and is not
+represented as a `28a899ebae` hardware build.
 
 ## Host, build and memory results
 
@@ -49,10 +49,39 @@ complete 640 KiB GNSS RAM region as heap:
 Values are bytes. The output-disabled artifact contract, built-in GNSS/PWM/
 eMMC exclusion and no-automatic-fallback storage policy all passed.
 
+## Real Rover SITL MAVLink GCS transaction — PASS
+
+`run_m1_rover_gcs_sitl.py` built Rover SITL from the clean
+`28a899ebae4b81c659378aa5561763ced58a6cba` tree, launched an isolated wiped
+instance and connected as `MAV_COMP_ID_MISSIONPLANNER`. After ten consecutive
+disarmed heartbeats allowed mission storage to initialize, the sequence:
+
+1. verified the initial empty mission;
+2. uploaded, downloaded and compared a three-item backup fixture;
+3. uploaded, downloaded and compared a distinct three-item test mission;
+4. entered AUTO while disarmed and returned to HOLD;
+5. restored and verified the backup fixture;
+6. restored and verified the initial empty state.
+
+The Rover SITL binary SHA-256 was
+`aab89f737f40da59fcf24c70ad1298d397e2b9c420ddd2c9bb1ab006a5ec5a7a`.
+Machine-readable evidence records `sequence_passed=true`,
+`arm_command_sent=false`, `armed_observed=false`,
+`initial_state_restored=true`, and every Spresense hardware, physical output,
+driving, motion and autonomous-completion claim as false.
+
+Real integration exposed and closed four protocol hazards: early heartbeat
+before mission storage readiness, dynamic item 0 HOME contents, the transient
+`current` flag, and Fence/Rally mission-type traffic. Responses use
+`MISSION_ITEM_INT` even for a legacy request so float32 latitude/longitude
+rounding cannot silently move a waypoint. Retry, duplicate request and restore
+paths are covered by host tests. This is an instrumented GCS-client result, not
+a Mission Planner or QGroundControl GUI result.
+
 ## Tested-code SITL autonomy result — PASS
 
 `run_m1_rover_sitl_autonomy.py` performed a full Rover SITL build from
-`b455243f80` and ran `Rover.DriveMission`. The captured sequence completed:
+`28a899ebae` and ran `Rover.DriveMission`. The captured sequence completed:
 
 1. GCS mission upload;
 2. software ARM;
@@ -96,9 +125,15 @@ proof of a software regression and not as a sensor PASS.
 The simulation gate is reproducible with:
 
 ```sh
+python3 Tools/spresense/run_m1_rover_gcs_sitl.py \
+  --output build/spresense-m1-rover-link-artifacts/gcs-sitl-evidence.json
+
 python3 Tools/spresense/run_m1_rover_sitl_autonomy.py \
   --output build/spresense-m1-rover-link-artifacts/sitl-autonomy-evidence.json
 ```
+
+No board power, DTR reset, flash, USB-port operation or physical-output action
+was performed while producing the `28a899ebae` SITL evidence.
 
 For hardware, first remove and reapply the complete board power. A DTR reset is
 not a full power cycle. Start the GCS checker for the cold boot without

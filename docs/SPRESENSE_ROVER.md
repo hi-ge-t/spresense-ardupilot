@@ -8,9 +8,10 @@ car with front steering and rear-wheel throttle. It is a software and
 output-disabled hardware feasibility artifact, not drive-ready firmware. One
 combined-board sensor/command hardware gate passed on the original Rover
 profile. The latest software adds fail-closed shadow output, a reversible GCS
-mission-protocol test and an ArduPilot SITL autonomy sequence. The tested-code
-SITL sequence passes, while the latest hardware GCS mission round-trip remains
-HOLD after a warm-reset sensor-stream failure. See the
+mission-protocol test and two real Rover SITL gates: a disarmed GCS transaction
+and the standard ArduPilot autonomy sequence. Both tested-code SITL gates pass,
+while the latest hardware GCS mission round-trip remains HOLD after a warm-
+reset sensor-stream failure. See the
 [original hardware evidence](evidence/SPRESENSE_M1_ROVER_20260804.md) and the
 [GCS/autonomy evidence](evidence/SPRESENSE_M1_ROVER_GCS_AUTONOMY_20260804.md).
 
@@ -155,13 +156,39 @@ This checks the same MAVLink mission/command protocol used by a GCS, but is not
 a separate Mission Planner or QGroundControl GUI test. It never claims sensor
 health from heartbeat alone, cannot arm the vehicle and cannot cause motion.
 
+The mission client accepts both `MISSION_REQUEST` and `MISSION_REQUEST_INT` but
+always replies with `MISSION_ITEM_INT`, avoiding legacy float-coordinate
+rounding. It filters Fence/Rally traffic, treats item 0 HOME position as
+vehicle-generated and ignores the transient `current` flag during round-trip
+comparison. Duplicate item requests remain safe and covered by host tests.
+
 The 2026-08-04 run on firmware `31a5aadd` received the ground-rover heartbeat
 and matched the boot identity, but timed out waiting for `MISSION_COUNT`. The
 mission was never downloaded or modified. This hardware gate is therefore
 HOLD, not PASS. A complete board power cycle and cold-boot rerun are required;
 a DTR reset is not equivalent to removing and reapplying board power.
 
-## SITL GCS/autonomy sequence
+## Real Rover SITL GCS transaction
+
+`run_m1_rover_gcs_sitl.py` launches an isolated, wiped Rover SITL instance and
+runs the same instrumented GCS client against the real MAVLink mission server.
+It waits for mission storage initialization, verifies an initial empty mission,
+round-trips distinct backup and test fixtures, enters AUTO while disarmed,
+returns to HOLD, restores both the backup and initial state, and terminates the
+exact child process. It never sends ARM:
+
+```sh
+python3 Tools/spresense/run_m1_rover_gcs_sitl.py \
+  --output build/spresense-m1-rover-link-artifacts/gcs-sitl-evidence.json
+```
+
+This transaction passed at `28a899ebae`. The evidence records
+`arm_command_sent=false`, `initial_state_restored=true` and all hardware,
+physical-output, driving and autonomous-completion claims as false. It proves
+the GCS transaction and recovery logic against Rover SITL, not a GUI GCS or
+Spresense hardware.
+
+## SITL autonomy sequence
 
 The standard ArduPilot Rover `DriveMission` test is the executable autonomy
 gate. It rebuilds Rover SITL from the current source tree and performs mission
@@ -173,7 +200,7 @@ python3 Tools/spresense/run_m1_rover_sitl_autonomy.py \
   --output build/spresense-m1-rover-link-artifacts/sitl-autonomy-evidence.json
 ```
 
-This sequence passed at `b455243f80`. It proves the upstream regular-front-
+This sequence passed at `28a899ebae`. It proves the upstream regular-front-
 steering navigation sequence in simulation and the test harness around it. It
 does not test Spresense sensor timing, electrical outputs or vehicle driving.
 
@@ -189,7 +216,8 @@ does not test Spresense sensor timing, electrical outputs or vehicle driving.
 | Latest Rover boot identity and heartbeat | `31a5aadd`: matching runtime and `MAV_TYPE_GROUND_ROVER` | PASS |
 | Latest sensor runtime after warm reset | PWBIMU opened, then stream failed; GNSS sample absent | HOLD; do not regress original PASS claim |
 | Latest hardware GCS mission round-trip | timed out waiting for `MISSION_COUNT`; no mission modified | HOLD pending cold boot |
-| Tested-code SITL autonomous sequence | `b455243f80`: upload, ARM, AUTO, waypoints, completion, DISARM | PASS in simulation only |
+| Real Rover SITL GCS transaction | `28a899ebae`: backup/test upload/download, disarmed AUTO/HOLD, full restore, no ARM command | PASS in simulation only |
+| Tested-code SITL autonomous sequence | `28a899ebae`: upload, ARM, AUTO, waypoints, completion, DISARM | PASS in simulation only |
 | Normal/forced arm denial | original hardware run and fail-closed implementation | PASS; arming remains impossible |
 | MANUAL_CONTROL to CH1/CH3 override | CH1=1800, CH3=1700 dry-run on original hardware run | PASS for input path only |
 | Physical write count | reject-only shadow implementation and no backend | software guard PASS; electrical HOLD |
