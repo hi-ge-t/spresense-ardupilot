@@ -65,9 +65,25 @@ def main() -> int:
     else:
         raise AssertionError("missing runtime markers were accepted")
 
+    runtime_commit = checker.require_runtime_identity(
+        bytearray(b"Init ArduCopter V4.7.0 (b78a597a)\n"),
+        "b78a597aa9aa11bb22cc33dd44ee55ff66778899",
+    )
+    expect(runtime_commit == "b78a597a", "runtime commit prefix is returned")
+    try:
+        checker.require_runtime_identity(
+            bytearray(b"Init ArduCopter V4.7.0 (dd60842f)\n"),
+            "b78a597aa9aa11bb22cc33dd44ee55ff66778899",
+        )
+    except checker.CheckError as error:
+        expect("does not match" in str(error), "stale runtime is reported")
+    else:
+        raise AssertionError("stale runtime commit was accepted")
+
     print(
         "spresense_m1_copter_serial_host=PASS "
-        "transient_zero_read=tolerated runtime_markers=required"
+        "transient_zero_read=tolerated runtime_markers=required "
+        "runtime_identity=required"
     )
     return 0
 

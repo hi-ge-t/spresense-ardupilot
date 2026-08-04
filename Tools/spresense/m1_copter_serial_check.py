@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import subprocess
 import sys
@@ -159,6 +160,22 @@ def require_runtime_markers(diagnostics: bytearray) -> None:
     ]
     if missing:
         raise CheckError("runtime marker missing: " + " | ".join(missing))
+
+
+def require_runtime_identity(diagnostics: bytearray, project_commit: str) -> str:
+    match = re.search(
+        rb"Init ArduCopter [^\r\n]* \(([0-9a-fA-F]{8,40})\)",
+        diagnostics,
+    )
+    if match is None:
+        raise CheckError("runtime ArduCopter commit marker missing")
+    runtime_commit = match.group(1).decode("ascii").lower()
+    if not project_commit.lower().startswith(runtime_commit):
+        raise CheckError(
+            "runtime commit does not match artifact manifest: "
+            f"runtime={runtime_commit} manifest={project_commit}"
+        )
+    return runtime_commit
 
 
 def request_arm(
@@ -351,6 +368,9 @@ def main() -> int:
         heartbeat = wait_copter_startup(
             link, mavutil.mavlink, args.startup_timeout, diagnostics
         )
+        runtime_commit = require_runtime_identity(
+            diagnostics, manifest["project_commit"]
+        )
         if heartbeat.type != mavutil.mavlink.MAV_TYPE_QUADROTOR:
             raise CheckError(f"unexpected vehicle type: {heartbeat.type}")
         if heartbeat.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED:
@@ -391,6 +411,7 @@ def main() -> int:
             "reset_dtr": args.reset_dtr,
             "profile": "spresense-m1-copter-link",
             "project_commit": manifest["project_commit"],
+            "runtime_commit": runtime_commit,
             "image_sha256": manifest["artifact.nuttx.spk.sha256"],
             "target_system": target_system,
             "target_component": target_component,
