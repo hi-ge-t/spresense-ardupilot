@@ -406,6 +406,18 @@ def main() -> int:
                 + " | ".join(forbidden)
             )
 
+        final_project_commit = git_value(root, "rev-parse", "HEAD")
+        final_dirty = bool(git_value(
+            root, "status", "--porcelain", "--ignore-submodules=untracked"
+        ))
+        if final_project_commit != project_commit:
+            raise RuntimeError(
+                "project commit changed during build: "
+                f"{project_commit} -> {final_project_commit}"
+            )
+        if final_dirty != dirty:
+            raise RuntimeError("project tree state changed during build")
+
         memory = json.loads(map_report.read_text(encoding="utf-8"))
         manifest_values = {
             "profile": PROFILE,
