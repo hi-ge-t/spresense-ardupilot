@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "upstream": {
+    "vehicle": "Rover",
+    "tag": "Rover-4.7.0",
+    "commit": "1511f27194f1dcc3728270883047bdf022b3fd53"
+  },
+  "sdk": {
+    "remote": "https://github.com/sonydevworld/spresense.git",
+    "commit": "7fd61b2c03f06a4ff0302b84c755e58c338788b2"
+  },
+  "target": {
+    "board": "Sony Spresense CXD5602",
+    "os": "Sony Spresense SDK NuttX",
+    "profile": "spresense-m1-rover-link",
+    "entrypoint": "ardurover_spresense_main"
+  },
+  "rover": {
+    "full_vehicle_archive": true,
+    "frame": "regular-front-steering",
+    "steering_function": "GroundSteering/CH1",
+    "throttle_function": "Throttle/CH3",
+    "manual_control_axes": "y=steering,z=throttle",
+    "scheduler": "nuttx-pthread",
+    "loop_rate_default_hz": 100,
+    "sensor_hal_integration": "GNSS+INS",
+    "runtime": "hardware-HOLD",
+    "vehicle_ready": false
+  },
+  "gnss": {
+    "builtin": "disabled",
+    "addon": "required",
+    "device": "/dev/gps2",
+    "ram": "required-complete-heap",
+    "hal_integration": "AP_GPS_Spresense",
+    "runtime_fallback": "disabled"
+  },
+  "pwbimu": {
+    "addon": "required",
+    "device": "/dev/imu0",
+    "bus": "SPI5",
+    "pinshare": "eMMC",
+    "hal_integration": "AP_InertialSensor_Spresense",
+    "sample_rate_hz": 60,
+    "sample_rate_status": "bringup-only-hardware-HOLD",
+    "orientation": "ROTATION_NONE-hardware-HOLD",
+    "runtime_fallback": "disabled"
+  },
+  "safety": {
+    "arming": "rover-path-always-reject",
+    "actuator_driver": "reject-only-no-physical-backend",
+    "outputs": "disabled",
+    "physical_write_expected": 0
+  },
+  "gcs": {
+    "transport": "/dev/ttyS0",
+    "baud": 115200,
+    "heartbeat_vehicle_type": "GROUND_ROVER",
+    "manual_control": "accepted-for-dry-run-only",
+    "runtime": "hardware-HOLD"
+  },
+  "storage": {
+    "development": "microSD",
+    "development_path": "/mnt/sd0/APM/ardupilot.stg",
+    "mount_policy": "explicit-fixed-device",
+    "final_candidate": "eMMC",
+    "automatic_fallback": "disabled",
+    "pwbimu_emmc_coexistence": "hardware-design-HOLD"
+  },
+  "distribution": {
+    "license": "GPL-3.0-or-later",
+    "binary": "disabled",
+    "source_remote": "https://github.com/hi-ge-t/spresense-ardupilot"
+  },
+  "evidence": {
+    "host_contract": "required",
+    "sony_rover_link": "required",
+    "linker_map_guard": "required",
+    "boot": "HOLD",
+    "gcs": "HOLD",
+    "normal_arm_denial": "HOLD",
+    "forced_arm_denial": "HOLD",
+    "manual_steering_dry_run": "HOLD",
+    "physical_steering": "out-of-scope",
+    "physical_throttle": "out-of-scope",
+    "sensor_runtime": "HOLD",
+    "timing": "HOLD",
+    "gnss_accuracy": "HOLD",
+    "driving": "out-of-scope"
+  }
+}

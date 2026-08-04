@@ -12,6 +12,12 @@
 > accuracy, control and flight remain unverified. It is not flight-ready
 > firmware. See
 > [Spresense M1 bring-up](docs/SPRESENSE_M1.md).
+>
+> A separate output-disabled ArduRover artifact now links the full Rover 4.7.0
+> archive for a conventional front-steering vehicle: CH1/GroundSteering and
+> CH3/Throttle. It accepts MAVLink manual-control input only as a dry-run,
+> rejects normal and forced arming, and has no physical PWM/CAN backend. See
+> [Spresense regular-front-steering Rover](docs/SPRESENSE_ROVER.md).
 
 [![Discord](https://img.shields.io/discord/674039678562861068.svg)](https://ardupilot.org/discord)
 

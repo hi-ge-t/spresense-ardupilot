@@ -113,7 +113,7 @@ def inspect(path: Path) -> dict[str, object]:
     for name, span in gnss_static:
         require_region_allow_empty(span, GNSS_ORIGIN, GNSS_BYTES, name)
         if span.size != 0:
-            raise MapError(f"{name} must be empty in output-disabled Copter")
+            raise MapError(f"{name} must be empty in output-disabled vehicle")
     require_region(gnss_heap, GNSS_ORIGIN, GNSS_BYTES, "GNSS heap")
     expected_gnss_heap = Span(GNSS_ORIGIN, GNSS_ORIGIN + GNSS_BYTES)
     if gnss_heap != expected_gnss_heap:
@@ -159,18 +159,25 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--map", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument(
+        "--vehicle", choices=("copter", "rover"), default="copter"
+    )
     args = parser.parse_args()
     try:
         report = inspect(args.map)
+        report["format"] = f"spresense-m1-{args.vehicle}-memory-v1"
         args.output.write_text(
             json.dumps(report, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
     except (MapError, OSError, UnicodeError) as error:
-        print(f"spresense_m1_copter_map=FAIL reason={error}", file=sys.stderr)
+        print(
+            f"spresense_m1_{args.vehicle}_map=FAIL reason={error}",
+            file=sys.stderr,
+        )
         return 1
     print(
-        "spresense_m1_copter_map=PASS "
+        f"spresense_m1_{args.vehicle}_map=PASS "
         f"app_heap_bytes={report['application_sram']['heap_envelope']['bytes']} "
         f"gnss_heap_bytes={report['gnss_ram']['heap']['bytes']}"
     )

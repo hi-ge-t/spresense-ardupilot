@@ -25,6 +25,9 @@ case ${PROFILE} in
   spresense-m1-copter-link)
     DEFAULT_ARTIFACT_DIR="${ROOT_DIR}/build/spresense-m1-copter-link-artifacts"
     ;;
+  spresense-m1-rover-link)
+    DEFAULT_ARTIFACT_DIR="${ROOT_DIR}/build/spresense-m1-rover-link-artifacts"
+    ;;
   *)
     echo "Unsupported Spresense profile: ${PROFILE}" >&2
     exit 2
@@ -72,10 +75,40 @@ for contract in \
   fi
 done
 
-if [[ ${PROFILE} != spresense-m1-copter-link &&
-      $(manifest_value m1.gnss.ram) != required ]]; then
+if [[ $(manifest_value m1.gnss.ram) != required &&
+      $(manifest_value m1.gnss.ram) != required-complete-heap ]]; then
   echo "Artifact GNSS RAM contract mismatch: m1.gnss.ram=required" >&2
   exit 1
+fi
+
+if [[ ${PROFILE} == spresense-m1-rover-link ]]; then
+  for contract in \
+    'm1.rover.full=true' \
+    'm1.rover.entry=ardurover_spresense_main' \
+    'm1.rover.scheduler=nuttx-pthread' \
+    'm1.rover.frame=regular-front-steering' \
+    'm1.rover.steering_function=GroundSteering/CH1' \
+    'm1.rover.throttle_function=Throttle/CH3' \
+    'm1.gnss.device=/dev/gps2' \
+    'm1.gnss.ram=required-complete-heap' \
+    'm1.gnss.hal_integration=AP_GPS_Spresense' \
+    'm1.pwbimu.addon=required' \
+    'm1.pwbimu.device=/dev/imu0' \
+    'm1.pwbimu.bus=SPI5' \
+    'm1.pwbimu.pinshare=eMMC' \
+    'm1.pwbimu.hal_integration=AP_InertialSensor_Spresense' \
+    'm1.sensor.hal_integration=GNSS+INS' \
+    'm1.sensor_fallback=disabled' \
+    'm1.storage.automatic_fallback=disabled' \
+    'm1.runtime=hardware-HOLD' \
+    'm1.flight_ready=false'; do
+    key=${contract%%=*}
+    expected=${contract#*=}
+    if [[ $(manifest_value "${key}") != "${expected}" ]]; then
+      echo "Artifact Rover contract mismatch: ${contract}" >&2
+      exit 1
+    fi
+  done
 fi
 
 if [[ ${PROFILE} == spresense-m1-pwbimu-gnss-gcs ]]; then

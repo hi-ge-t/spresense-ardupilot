@@ -14,6 +14,20 @@
 
 namespace {
 
+#if defined(CONFIG_SPRESENSE_M1_ROVER_LINK)
+constexpr const char *BOOT_HAL = "SPRESENSE_M1_ROVER_BOOT=HAL\n";
+constexpr const char *BOOT_SCHEDULER_FAIL =
+    "SPRESENSE_M1_ROVER_BOOT=SCHEDULER_FAIL\n";
+constexpr const char *BOOT_SETUP = "SPRESENSE_M1_ROVER_BOOT=SETUP\n";
+constexpr const char *BOOT_LOOP = "SPRESENSE_M1_ROVER_BOOT=LOOP\n";
+#else
+constexpr const char *BOOT_HAL = "SPRESENSE_M1_COPTER_BOOT=HAL\n";
+constexpr const char *BOOT_SCHEDULER_FAIL =
+    "SPRESENSE_M1_COPTER_BOOT=SCHEDULER_FAIL\n";
+constexpr const char *BOOT_SETUP = "SPRESENSE_M1_COPTER_BOOT=SETUP\n";
+constexpr const char *BOOT_LOOP = "SPRESENSE_M1_COPTER_BOOT=LOOP\n";
+#endif
+
 Spresense::UARTDriver serial0_driver("/dev/ttyS0");
 Empty::UARTDriver serial1_driver;
 Empty::UARTDriver serial2_driver;
@@ -84,12 +98,12 @@ void Spresense::HAL_Spresense::run(
     if (!Spresense::sensor_bridge_platform_ready()) {
         AP_HAL::panic("Spresense sensor bridge unavailable");
     }
-    console->printf("SPRESENSE_M1_COPTER_BOOT=HAL\n");
+    console->printf("%s", BOOT_HAL);
     console->flush();
 
     scheduler->init();
     if (!scheduler_instance.timing_healthy()) {
-        console->printf("SPRESENSE_M1_COPTER_BOOT=SCHEDULER_FAIL\n");
+        console->printf("%s", BOOT_SCHEDULER_FAIL);
         console->flush();
         AP_HAL::panic("Spresense scheduler startup failed");
     }
@@ -107,11 +121,11 @@ void Spresense::HAL_Spresense::run(
     // callbacks against partially initialized vehicle and sensor objects.
     scheduler_instance.hal_initialized();
 
-    console->printf("SPRESENSE_M1_COPTER_BOOT=SETUP\n");
+    console->printf("%s", BOOT_SETUP);
     console->flush();
     callbacks->setup();
     scheduler->set_system_initialized();
-    console->printf("SPRESENSE_M1_COPTER_BOOT=LOOP\n");
+    console->printf("%s", BOOT_LOOP);
     console->flush();
 
     for (;;) {

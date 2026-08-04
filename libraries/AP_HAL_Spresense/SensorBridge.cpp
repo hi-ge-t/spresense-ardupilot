@@ -6,6 +6,14 @@
 
 #include <math.h>
 
+#if defined(CONFIG_SPRESENSE_M1_ROVER_LINK)
+#define SPRESENSE_M1_GNSS_DEVICE CONFIG_SPRESENSE_M1_ROVER_GNSS_DEVICE
+#define SPRESENSE_M1_PWBIMU_DEVICE CONFIG_SPRESENSE_M1_ROVER_PWBIMU_DEVICE
+#else
+#define SPRESENSE_M1_GNSS_DEVICE CONFIG_SPRESENSE_M1_COPTER_GNSS_DEVICE
+#define SPRESENSE_M1_PWBIMU_DEVICE CONFIG_SPRESENSE_M1_COPTER_PWBIMU_DEVICE
+#endif
+
 namespace {
 
 constexpr float GRAVITY_M_S2 = 9.80665f;
@@ -397,7 +405,7 @@ void run_gnss_reader()
 void *gnss_init_thread(void *)
 {
     gnss_marker("SPRESENSE_M1_GNSS=THREAD\n");
-    int fd = open(CONFIG_SPRESENSE_M1_COPTER_GNSS_DEVICE,
+    int fd = open(SPRESENSE_M1_GNSS_DEVICE,
                   O_RDONLY);
     if (fd < 0) {
         gnss_init_fail(fd, "SPRESENSE_M1_GNSS=OPEN_FAIL\n");
@@ -675,7 +683,7 @@ bool Spresense::pwbimu_start(uint16_t sample_rate_hz)
     if (state == PWBIMU_STREAM_FAILED) {
         return false;
     }
-    pwbimu_fd = open(CONFIG_SPRESENSE_M1_COPTER_PWBIMU_DEVICE,
+    pwbimu_fd = open(SPRESENSE_M1_PWBIMU_DEVICE,
                      O_RDONLY | O_NONBLOCK);
     if (pwbimu_fd < 0) {
         gnss_marker("SPRESENSE_M1_PWBIMU=OPEN_FAILED\n");

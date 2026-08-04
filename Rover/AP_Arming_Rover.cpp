@@ -132,6 +132,11 @@ void AP_Arming_Rover::update_soft_armed()
  */
 bool AP_Arming_Rover::arm(AP_Arming::Method method, const bool do_arming_checks)
 {
+#if defined(HAL_SPRESENSE_OUTPUT_DISABLED) && HAL_SPRESENSE_OUTPUT_DISABLED
+    gcs().send_text(MAV_SEVERITY_CRITICAL, "Arm: Spresense outputs disabled");
+    return false;
+#endif
+
     if (!AP_Arming::arm(method, do_arming_checks)) {
         AP_Notify::events.arming_failed = true;
         return false;

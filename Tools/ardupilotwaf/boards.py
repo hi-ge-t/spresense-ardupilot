@@ -1137,12 +1137,19 @@ class spresense(Board):
     def configure_env(self, cfg, env):
         super(spresense, self).configure_env(cfg, env)
 
+        ap_main = os.environ.get(
+            'SPRESENSE_AP_MAIN', 'arducopter_spresense_main')
+        if ap_main not in (
+                'arducopter_spresense_main',
+                'ardurover_spresense_main'):
+            cfg.fatal('Unsupported SPRESENSE_AP_MAIN: %s' % ap_main)
+
         env.BOARD_CLASS = "SPRESENSE"
         env.DEFINES.update(
             CONFIG_HAL_BOARD = 'HAL_BOARD_SPRESENSE',
             CONFIG_HAL_BOARD_SUBTYPE = 'HAL_BOARD_SUBTYPE_NONE',
             AP_SIM_ENABLED = 0,
-            AP_MAIN = 'arducopter_spresense_main',
+            AP_MAIN = ap_main,
             HAL_WITH_DSP = 0,
         )
 

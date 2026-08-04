@@ -363,7 +363,7 @@ def main() -> int:
             "m1.physical_write_expected",
             "m1.sensor.hal_integration",
             "verify_embedded_commit",
-            '"waf", "copter"',
+            '"waf_vehicle": "copter"',
         ),
     )
 

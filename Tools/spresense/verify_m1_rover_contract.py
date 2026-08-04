@@ -1,0 +1,275 @@
+#!/usr/bin/env python3
+
+# AP_FLAKE8_CLEAN
+
+"""Verify the fail-closed regular-front-steering M1 Rover contract."""
+
+import json
+from pathlib import Path
+import sys
+
+
+EXPECTED = {
+    "upstream.vehicle": "Rover",
+    "upstream.tag": "Rover-4.7.0",
+    "upstream.commit": "1511f27194f1dcc3728270883047bdf022b3fd53",
+    "sdk.commit": "7fd61b2c03f06a4ff0302b84c755e58c338788b2",
+    "target.os": "Sony Spresense SDK NuttX",
+    "target.profile": "spresense-m1-rover-link",
+    "target.entrypoint": "ardurover_spresense_main",
+    "rover.full_vehicle_archive": True,
+    "rover.frame": "regular-front-steering",
+    "rover.steering_function": "GroundSteering/CH1",
+    "rover.throttle_function": "Throttle/CH3",
+    "rover.manual_control_axes": "y=steering,z=throttle",
+    "rover.scheduler": "nuttx-pthread",
+    "rover.loop_rate_default_hz": 100,
+    "rover.sensor_hal_integration": "GNSS+INS",
+    "rover.runtime": "hardware-HOLD",
+    "rover.vehicle_ready": False,
+    "gnss.builtin": "disabled",
+    "gnss.addon": "required",
+    "gnss.device": "/dev/gps2",
+    "gnss.ram": "required-complete-heap",
+    "gnss.runtime_fallback": "disabled",
+    "pwbimu.addon": "required",
+    "pwbimu.device": "/dev/imu0",
+    "pwbimu.bus": "SPI5",
+    "pwbimu.runtime_fallback": "disabled",
+    "safety.arming": "rover-path-always-reject",
+    "safety.actuator_driver": "reject-only-no-physical-backend",
+    "safety.outputs": "disabled",
+    "safety.physical_write_expected": 0,
+    "gcs.heartbeat_vehicle_type": "GROUND_ROVER",
+    "gcs.manual_control": "accepted-for-dry-run-only",
+    "storage.development": "microSD",
+    "storage.mount_policy": "explicit-fixed-device",
+    "storage.final_candidate": "eMMC",
+    "storage.automatic_fallback": "disabled",
+    "distribution.binary": "disabled",
+    "evidence.physical_steering": "out-of-scope",
+    "evidence.physical_throttle": "out-of-scope",
+    "evidence.driving": "out-of-scope",
+}
+
+
+def nested_value(document, dotted_key):
+    value = document
+    for component in dotted_key.split("."):
+        value = value[component]
+    return value
+
+
+def require_tokens(failures, label, text, tokens):
+    for token in tokens:
+        if token not in text:
+            failures.append(f"{label}-token-missing={token}")
+
+
+def main() -> int:
+    root = Path(__file__).resolve().parents[2]
+    document = json.loads(
+        (root / "spresense-m1-rover-manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    failures = []
+    for key, expected in EXPECTED.items():
+        try:
+            actual = nested_value(document, key)
+        except KeyError:
+            failures.append(f"{key}=missing")
+            continue
+        if actual != expected:
+            failures.append(f"{key}={actual!r} expected={expected!r}")
+
+    board = (root / "libraries/AP_HAL/board/spresense.h").read_text(
+        encoding="utf-8"
+    )
+    require_tokens(
+        failures,
+        "board",
+        board,
+        (
+            "#define HAL_INS_DEFAULT HAL_INS_SPRESENSE",
+            "#define HAL_GPS1_TYPE_DEFAULT 27",
+            "#define SCHEDULER_DEFAULT_LOOP_RATE 100",
+            "#define HAL_SPRESENSE_OUTPUT_DISABLED 1",
+            "#define HAL_NUM_CAN_IFACES 0",
+            "#define HAL_LOGGING_FILESYSTEM_ENABLED 0",
+        ),
+    )
+
+    arming = (root / "Rover/AP_Arming_Rover.cpp").read_text(
+        encoding="utf-8"
+    )
+    require_tokens(
+        failures,
+        "arming",
+        arming,
+        (
+            "HAL_SPRESENSE_OUTPUT_DISABLED",
+            '"Arm: Spresense outputs disabled"',
+            "return false;",
+        ),
+    )
+
+    parameters = (root / "Rover/Parameters.cpp").read_text(encoding="utf-8")
+    require_tokens(
+        failures,
+        "regular-frame-defaults",
+        parameters,
+        (
+            "SRV_Channels::set_default_function(CH_1, SRV_Channel::k_steering)",
+            "SRV_Channels::set_default_function(CH_3, SRV_Channel::k_throttle)",
+        ),
+    )
+    motors = (
+        root / "libraries/AR_Motors/AP_MotorsUGV.cpp"
+    ).read_text(encoding="utf-8")
+    require_tokens(
+        failures,
+        "regular-frame-output",
+        motors,
+        (
+            "output_regular(armed, ground_speed, _steering, _throttle);",
+            "output_throttle(SRV_Channel::k_throttle, throttle);",
+            "SRV_Channels::set_output_scaled(SRV_Channel::k_steering, steering);",
+        ),
+    )
+    gcs = (root / "Rover/GCS_MAVLink_Rover.cpp").read_text(encoding="utf-8")
+    require_tokens(
+        failures,
+        "rover-gcs",
+        gcs,
+        (
+            "MAV_TYPE_GROUND_ROVER",
+            "manual_override(rover.channel_steer, packet.y",
+            "manual_override(rover.channel_throttle, packet.z",
+        ),
+    )
+
+    hal_root = root / "libraries/AP_HAL_Spresense"
+    implementation = "\n".join(
+        path.read_text(encoding="utf-8") for path in hal_root.glob("*.cpp")
+    )
+    for forbidden in ("/dev/pwm", "/dev/dshot", "/dev/can"):
+        if forbidden in implementation.lower():
+            failures.append(f"physical-output-path={forbidden}")
+    require_tokens(
+        failures,
+        "hal",
+        implementation,
+        (
+            "_guard.request_write",
+            "physical_write_count() const",
+            "return 0U;",
+            "SPRESENSE_M1_OUTPUT=WRITE_REJECTED",
+            'Spresense::UARTDriver serial0_driver("/dev/ttyS0")',
+            "SPRESENSE_M1_ROVER_BOOT=LOOP",
+        ),
+    )
+
+    profile = (
+        root / "Tools/spresense/rover_app/configs/output_disabled/defconfig"
+    ).read_text(encoding="utf-8")
+    require_tokens(
+        failures,
+        "rover-profile",
+        profile,
+        (
+            "+SPRESENSE_M1_ROVER_LINK=y",
+            "+CXD56_GNSS_ADDON=y",
+            "+SENSORS_CXD5610_GNSS=y",
+            "+SENSORS_CXD5602PWBIMU=y",
+            "+CXD56_GNSS_RAM=y",
+            "+CXD56_GNSS_HEAP=y",
+            "+CXD56_SDIO=y",
+            "-FS_AUTOMOUNTER=y",
+            '+INIT_ENTRYPOINT="ardurover_spresense_main"',
+            "-CXD56_GNSS=y",
+            "-CXD56_EMMC=y",
+            "-CXD56_PWM=y",
+            "-PWM=y",
+        ),
+    )
+
+    app_makefile = (root / "Tools/spresense/rover_app/Makefile").read_text(
+        encoding="utf-8"
+    )
+    require_tokens(
+        failures,
+        "rover-app",
+        app_makefile,
+        (
+            "CXXSRCS += SensorBridge.cpp",
+            "BIN := $(M1_ROVER_SDK_BUILD_DIR)/libAP_HAL_Spresense_sdk.a",
+        ),
+    )
+
+    build = (
+        root / "Tools/spresense/build_m1_copter_firmware.py"
+    ).read_text(encoding="utf-8")
+    require_tokens(
+        failures,
+        "build",
+        build,
+        (
+            '"rover": {',
+            '"ardurover_spresense_main"',
+            '"build/spresense/lib/bin/libardurover.a"',
+            '"build/spresense/lib/libRover_libs.a"',
+            '"waf_vehicle": "rover"',
+            '"m1.rover.frame"',
+            'env["SPRESENSE_AP_MAIN"]',
+        ),
+    )
+
+    documentation = (root / "docs/SPRESENSE_ROVER.md").read_text(
+        encoding="utf-8"
+    )
+    require_tokens(
+        failures,
+        "documentation",
+        documentation,
+        (
+            "SERVO1_FUNCTION=26",
+            "SERVO3_FUNCTION=70",
+            "TODO: 未確認",
+            "no automatic device, sensor or storage fallback",
+            "HAL_SPRESENSE_OUTPUT_DISABLED=1",
+            "It does not mean the car can be driven yet.",
+        ),
+    )
+
+    flash = (root / "Tools/flash_spresense.sh").read_text(encoding="utf-8")
+    require_tokens(
+        failures,
+        "flash",
+        flash,
+        (
+            "spresense-m1-rover-link",
+            "m1.rover.entry=ardurover_spresense_main",
+            "m1.rover.frame=regular-front-steering",
+            "m1.outputs=disabled",
+            "m1.arming=always-denied",
+            "m1.physical_write_expected=0",
+            "m1.storage.automatic_fallback=disabled",
+        ),
+    )
+
+    if failures:
+        print(
+            "spresense_m1_rover_contract=FAIL " + " ".join(failures),
+            file=sys.stderr,
+        )
+        return 1
+    print(
+        "spresense_m1_rover_contract=PASS "
+        "frame=regular-front-steering outputs=disabled vehicle_ready=false"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
