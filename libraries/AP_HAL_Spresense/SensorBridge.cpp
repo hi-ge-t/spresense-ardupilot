@@ -529,8 +529,15 @@ void *pwbimu_reader_thread(void *)
                     : "SPRESENSE_M1_PWBIMU=IRQ_DISABLED\n");
             }
             // Sony's level-triggered driver disables DRDY while HPWORK drains
-            // the FIFO. Re-arm it only after a full second without data so a
-            // missed completion cannot leave the sensor path permanently off.
+            // the FIFO. GNSS startup also shares I2C0 with the PWBIMU control
+            // plane, so restart sensing and re-arm DRDY only after a full
+            // second without data. This does not touch any actuator path.
+            const bool restarted =
+                checked_ioctl(pwbimu_fd, SNIOC_ENABLE, 0U) == 0 &&
+                checked_ioctl(pwbimu_fd, SNIOC_ENABLE, 1U) == 0;
+            gnss_marker(restarted
+                ? "SPRESENSE_M1_PWBIMU=RESTART_OK\n"
+                : "SPRESENSE_M1_PWBIMU=RESTART_FAIL\n");
             (void)board_gpio_int(PIN_EMMC_DATA3, false);
             (void)board_gpio_int(PIN_EMMC_DATA3, true);
             continue;

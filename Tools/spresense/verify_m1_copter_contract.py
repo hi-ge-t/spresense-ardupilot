@@ -217,6 +217,8 @@ def main() -> int:
             "start_pwbimu_reader_thread",
             "O_RDONLY | O_NONBLOCK",
             "poll(&descriptor, 1, PWBIMU_POLL_TIMEOUT_MS)",
+            "checked_ioctl(pwbimu_fd, SNIOC_ENABLE, 0U)",
+            "checked_ioctl(pwbimu_fd, SNIOC_ENABLE, 1U)",
             "board_gpio_int(PIN_EMMC_DATA3, false)",
             "board_gpio_int(PIN_EMMC_DATA3, true)",
             "gnss_position",
