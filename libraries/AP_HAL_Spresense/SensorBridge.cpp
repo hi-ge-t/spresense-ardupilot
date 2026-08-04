@@ -200,7 +200,7 @@ constexpr uint8_t PWBIMU_STREAM_FAILED = 3U;
 constexpr int PWBIMU_READER_PRIORITY = 185;
 constexpr size_t PWBIMU_READER_STACK_BYTES = 4096U;
 constexpr int PWBIMU_POLL_TIMEOUT_MS = 1000;
-constexpr uint8_t PWBIMU_MAX_REARMS = 1U;
+constexpr uint8_t PWBIMU_MAX_RESTARTS = 1U;
 
 enum class GnssWaitStatus : uint8_t {
     NOTIFIED,
@@ -497,7 +497,7 @@ void *pwbimu_reader_thread(void *)
     __atomic_store_n(
         &pwbimu_stream_state, PWBIMU_STREAM_READY, __ATOMIC_RELEASE);
     struct pollfd descriptor {pwbimu_fd, POLLIN, 0};
-    uint8_t rearm_attempts = 0U;
+    uint8_t restart_attempts = 0U;
     for (;;) {
         descriptor.revents = 0;
         int poll_result;
@@ -507,23 +507,35 @@ void *pwbimu_reader_thread(void *)
         if (poll_result == 0 ||
             (poll_result > 0 && (descriptor.revents & POLLIN) == 0)) {
             gnss_marker("SPRESENSE_M1_PWBIMU=POLL_TIMEOUT\n");
-            if (rearm_attempts >= PWBIMU_MAX_REARMS) {
+            if (restart_attempts >= PWBIMU_MAX_RESTARTS) {
                 gnss_marker("SPRESENSE_M1_PWBIMU=RECOVERY_EXHAUSTED\n");
                 __atomic_store_n(
                     &pwbimu_stream_state, PWBIMU_STREAM_FAILED,
                     __ATOMIC_RELEASE);
                 return nullptr;
             }
-            // Sony's level-triggered driver disables DRDY while HPWORK drains
-            // the FIFO. Its buffer-lock timeout path returns before restoring
-            // that interrupt. Re-arm DRDY once after a full second without
-            // data, without touching the I2C0 sensor-control plane shared with
-            // GNSS and without touching any actuator path. The board helper's
-            // status is advisory when the level interrupt is already enabled.
-            rearm_attempts++;
+            // GNSS startup shares I2C0 with the PWBIMU control plane. Recover
+            // a missed DRDY service window once after a full second without
+            // data. This is sensor-only and does not touch any actuator path.
+            const bool restarted =
+                checked_ioctl(pwbimu_fd, SNIOC_ENABLE, 0U) == 0 &&
+                checked_ioctl(pwbimu_fd, SNIOC_ENABLE, 1U) == 0;
+            restart_attempts++;
+            gnss_marker(restarted
+                ? "SPRESENSE_M1_PWBIMU=RESTART_OK\n"
+                : "SPRESENSE_M1_PWBIMU=RESTART_FAIL\n");
+            if (!restarted) {
+                __atomic_store_n(
+                    &pwbimu_stream_state, PWBIMU_STREAM_FAILED,
+                    __ATOMIC_RELEASE);
+                return nullptr;
+            }
+            // Re-arm the driver's DRDY edge after the successful stream
+            // restart. The Sony helper may report that the already-enabled
+            // edge was unchanged, so the stream ioctls remain the recovery
+            // success criterion.
             (void)board_gpio_int(PIN_EMMC_DATA3, false);
             (void)board_gpio_int(PIN_EMMC_DATA3, true);
-            gnss_marker("SPRESENSE_M1_PWBIMU=IRQ_REARMED\n");
             continue;
         }
         if (poll_result < 0) {
