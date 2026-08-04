@@ -312,7 +312,7 @@ void *Spresense::Scheduler::user_thread_trampoline(void *context)
 
 void Spresense::Scheduler::timer_thread()
 {
-    while (!hal_ready()) {
+    while (!initialized()) {
         if (!_clock.delay_microseconds(TIMER_PERIOD_US)) {
             mark_unhealthy();
         }

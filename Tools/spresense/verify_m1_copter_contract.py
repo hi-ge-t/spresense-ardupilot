@@ -162,6 +162,7 @@ def main() -> int:
             "sensor_bridge_platform_ready",
             "scheduler_instance.hal_initialized();",
             "while (!hal_ready())",
+            "while (!initialized())",
             "Empty::I2CDeviceManager i2c_manager",
             "Empty::SPIDeviceManager spi_manager",
         ),

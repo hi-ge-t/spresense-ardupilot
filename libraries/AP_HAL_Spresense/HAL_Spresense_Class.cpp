@@ -100,9 +100,11 @@ void Spresense::HAL_Spresense::run(
     gpio->init();
     rcin->init();
     rcout->init();
-    // Release timer and IO workers once the HAL drivers are ready.  Parameter
+    // Release the IO worker once the HAL drivers are ready. Parameter
     // conversions performed by setup() can fill the asynchronous save queue,
-    // so the IO worker must be able to drain it before vehicle setup finishes.
+    // so it must be able to drain before vehicle setup finishes. The timer
+    // worker still waits for set_system_initialized() to avoid running
+    // callbacks against partially initialized vehicle and sensor objects.
     scheduler_instance.hal_initialized();
 
     console->printf("SPRESENSE_M1_COPTER_BOOT=SETUP\n");
