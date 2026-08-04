@@ -19,6 +19,7 @@ def main() -> int:
         b"SPRESENSE_M1_GNSS=SAMPLE\n"
         b"SPRESENSE_M1_GNSS=ATTACH\n"
         b"SPRESENSE_M1_GNSS=CONSUMED\n"
+        b"SPRESENSE_M1_OUTPUT=SHADOW_ONLY\n"
         b"SPRESENSE_M1_OUTPUT=WRITE_REJECTED\n"
     )
     checker.require_runtime_markers(diagnostics, "rover")
@@ -43,7 +44,8 @@ def main() -> int:
 
     print(
         "spresense_m1_rover_serial_host=PASS "
-        "runtime_identity=required output_rejection=required"
+        "runtime_identity=required shadow_output=required "
+        "output_rejection=required"
     )
     return 0
 

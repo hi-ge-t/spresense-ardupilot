@@ -559,7 +559,24 @@ def main(default_vehicle: str = "copter") -> int:
                 "Throttle/CH3" if arguments.vehicle == "rover"
                 else "not-applicable"
             ),
+            "m1.rover.shadow_output": (
+                "hal-readback-only" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.gcs.mission_protocol": (
+                "reversible-upload-download-restore"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.gcs.autonomy_sequence": (
+                "hardware-dry-run-plus-sitl"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.gcs.autonomous_motion": (
+                "sitl-only" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
             "m1.outputs": "disabled",
+            "m1.outputs.shadow_readback": "enabled",
             "m1.arming": "always-denied",
             "m1.physical_write_expected": "0",
             "m1.storage.development": "microSD",

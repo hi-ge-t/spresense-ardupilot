@@ -21,6 +21,8 @@
     "steering_function": "GroundSteering/CH1",
     "throttle_function": "Throttle/CH3",
     "manual_control_axes": "y=steering,z=throttle",
+    "shadow_output": "hal-readback-only",
+    "autonomy_sequence": "gcs-hardware-dry-run-plus-sitl-drive-mission",
     "scheduler": "nuttx-pthread",
     "loop_rate_default_hz": 100,
     "sensor_hal_integration": "GNSS+INS",
@@ -57,6 +59,10 @@
     "baud": 115200,
     "heartbeat_vehicle_type": "GROUND_ROVER",
     "manual_control": "accepted-for-dry-run-only",
+    "mission_protocol": "reversible-upload-download-restore",
+    "auto_mode": "request-only-while-disarmed",
+    "shadow_output": "SERVO_OUTPUT_RAW",
+    "autonomous_motion": "sitl-only",
     "runtime": "hardware-HOLD"
   },
   "storage": {
@@ -81,6 +87,8 @@
     "normal_arm_denial": "HOLD",
     "forced_arm_denial": "HOLD",
     "manual_steering_dry_run": "HOLD",
+    "gcs_mission_round_trip": "HOLD",
+    "sitl_autonomy_sequence": "required",
     "physical_steering": "out-of-scope",
     "physical_throttle": "out-of-scope",
     "sensor_runtime": "HOLD",

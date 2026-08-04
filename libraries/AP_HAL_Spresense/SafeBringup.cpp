@@ -285,10 +285,43 @@ bool OutputGuard::request_arm()
 
 bool OutputGuard::request_write(uint8_t channel, uint16_t period_us)
 {
-    (void)channel;
-    (void)period_us;
     _write_reject_count++;
+    if (channel >= SHADOW_CHANNEL_COUNT) {
+        _unsupported_shadow_write_count++;
+        return false;
+    }
+    if (_shadow_corked) {
+        _pending_shadow_period_us[channel] = period_us;
+        _pending_shadow_seen[channel] = true;
+    } else {
+        _shadow_period_us[channel] = period_us;
+        _shadow_seen[channel] = true;
+        _shadow_frame_count++;
+    }
+    _shadow_write_count++;
     return false;
+}
+
+void OutputGuard::begin_shadow_frame()
+{
+    for (uint8_t channel = 0; channel < SHADOW_CHANNEL_COUNT; channel++) {
+        _pending_shadow_period_us[channel] = _shadow_period_us[channel];
+        _pending_shadow_seen[channel] = _shadow_seen[channel];
+    }
+    _shadow_corked = true;
+}
+
+void OutputGuard::commit_shadow_frame()
+{
+    if (!_shadow_corked) {
+        return;
+    }
+    for (uint8_t channel = 0; channel < SHADOW_CHANNEL_COUNT; channel++) {
+        _shadow_period_us[channel] = _pending_shadow_period_us[channel];
+        _shadow_seen[channel] = _pending_shadow_seen[channel];
+    }
+    _shadow_corked = false;
+    _shadow_frame_count++;
 }
 
 bool OutputGuard::armed() const
@@ -314,6 +347,34 @@ uint32_t OutputGuard::write_reject_count() const
 uint32_t OutputGuard::physical_write_count() const
 {
     return 0U;
+}
+
+uint32_t OutputGuard::shadow_write_count() const
+{
+    return _shadow_write_count;
+}
+
+uint32_t OutputGuard::shadow_frame_count() const
+{
+    return _shadow_frame_count;
+}
+
+uint32_t OutputGuard::unsupported_shadow_write_count() const
+{
+    return _unsupported_shadow_write_count;
+}
+
+bool OutputGuard::shadow_sample_seen(uint8_t channel) const
+{
+    return channel < SHADOW_CHANNEL_COUNT && _shadow_seen[channel];
+}
+
+uint16_t OutputGuard::shadow_period_us(uint8_t channel) const
+{
+    if (!shadow_sample_seen(channel)) {
+        return 0U;
+    }
+    return _shadow_period_us[channel];
 }
 
 } // namespace Spresense

@@ -89,6 +89,11 @@ if [[ ${PROFILE} == spresense-m1-rover-link ]]; then
     'm1.rover.frame=regular-front-steering' \
     'm1.rover.steering_function=GroundSteering/CH1' \
     'm1.rover.throttle_function=Throttle/CH3' \
+    'm1.rover.shadow_output=hal-readback-only' \
+    'm1.gcs.mission_protocol=reversible-upload-download-restore' \
+    'm1.gcs.autonomy_sequence=hardware-dry-run-plus-sitl' \
+    'm1.gcs.autonomous_motion=sitl-only' \
+    'm1.outputs.shadow_readback=enabled' \
     'm1.gnss.device=/dev/gps2' \
     'm1.gnss.ram=required-complete-heap' \
     'm1.gnss.hal_integration=AP_GPS_Spresense' \

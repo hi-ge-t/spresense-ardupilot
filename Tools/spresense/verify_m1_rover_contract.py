@@ -22,6 +22,10 @@ EXPECTED = {
     "rover.steering_function": "GroundSteering/CH1",
     "rover.throttle_function": "Throttle/CH3",
     "rover.manual_control_axes": "y=steering,z=throttle",
+    "rover.shadow_output": "hal-readback-only",
+    "rover.autonomy_sequence": (
+        "gcs-hardware-dry-run-plus-sitl-drive-mission"
+    ),
     "rover.scheduler": "nuttx-pthread",
     "rover.loop_rate_default_hz": 100,
     "rover.sensor_hal_integration": "GNSS+INS",
@@ -42,6 +46,10 @@ EXPECTED = {
     "safety.physical_write_expected": 0,
     "gcs.heartbeat_vehicle_type": "GROUND_ROVER",
     "gcs.manual_control": "accepted-for-dry-run-only",
+    "gcs.mission_protocol": "reversible-upload-download-restore",
+    "gcs.auto_mode": "request-only-while-disarmed",
+    "gcs.shadow_output": "SERVO_OUTPUT_RAW",
+    "gcs.autonomous_motion": "sitl-only",
     "storage.development": "microSD",
     "storage.mount_policy": "explicit-fixed-device",
     "storage.final_candidate": "eMMC",
@@ -165,6 +173,8 @@ def main() -> int:
             "physical_write_count() const",
             "return 0U;",
             "SPRESENSE_M1_OUTPUT=WRITE_REJECTED",
+            "SPRESENSE_M1_OUTPUT=SHADOW_ONLY",
+            "shadow_period_us",
             'Spresense::UARTDriver serial0_driver("/dev/ttyS0")',
             "SPRESENSE_M1_ROVER_BOOT=LOOP",
         ),
@@ -221,7 +231,42 @@ def main() -> int:
             '"build/spresense/lib/libRover_libs.a"',
             '"waf_vehicle": "rover"',
             '"m1.rover.frame"',
+            '"m1.rover.shadow_output"',
+            '"m1.gcs.autonomy_sequence"',
             'env["SPRESENSE_AP_MAIN"]',
+        ),
+    )
+
+    gcs_sequence = (
+        root / "Tools/spresense/m1_rover_gcs_sequence.py"
+    ).read_text(encoding="utf-8")
+    require_tokens(
+        failures,
+        "gcs-sequence",
+        gcs_sequence,
+        (
+            "mission_request_list_send",
+            "mission_count_send",
+            "mission_item_int_send",
+            "MAV_CMD_DO_SET_MODE",
+            "MAVLINK_MSG_ID_SERVO_OUTPUT_RAW",
+            "mission_restored",
+            '"autonomous_motion_verified": False',
+        ),
+    )
+
+    sitl_sequence = (
+        root / "Tools/spresense/run_m1_rover_sitl_autonomy.py"
+    ).read_text(encoding="utf-8")
+    require_tokens(
+        failures,
+        "sitl-sequence",
+        sitl_sequence,
+        (
+            "test.Rover.DriveMission",
+            '"mission_complete_verified": True',
+            '"spresense_hardware_verified": False',
+            '"driving_verified": False',
         ),
     )
 
@@ -272,6 +317,10 @@ def main() -> int:
             "spresense-m1-rover-link",
             "m1.rover.entry=ardurover_spresense_main",
             "m1.rover.frame=regular-front-steering",
+            "m1.rover.shadow_output=hal-readback-only",
+            "m1.gcs.mission_protocol=reversible-upload-download-restore",
+            "m1.gcs.autonomy_sequence=hardware-dry-run-plus-sitl",
+            "m1.outputs.shadow_readback=enabled",
             "m1.outputs=disabled",
             "m1.arming=always-denied",
             "m1.physical_write_expected=0",

@@ -97,6 +97,19 @@ def read_manifest(path: Path, vehicle: str = "copter") -> dict[str, str]:
     for key, expected in required.items():
         if values.get(key) != expected:
             raise CheckError(f"artifact contract mismatch: {key}={expected}")
+    if vehicle == "rover":
+        rover_required = {
+            "m1.rover.shadow_output": "hal-readback-only",
+            "m1.gcs.mission_protocol": "reversible-upload-download-restore",
+            "m1.gcs.autonomy_sequence": "hardware-dry-run-plus-sitl",
+            "m1.gcs.autonomous_motion": "sitl-only",
+            "m1.outputs.shadow_readback": "enabled",
+        }
+        for key, expected in rover_required.items():
+            if values.get(key) != expected:
+                raise CheckError(
+                    f"artifact contract mismatch: {key}={expected}"
+                )
     return values
 
 
@@ -190,6 +203,7 @@ def missing_runtime_markers(
         b"SPRESENSE_M1_GNSS=CONSUMED",
     ]
     if vehicle == "rover":
+        required.append(b"SPRESENSE_M1_OUTPUT=SHADOW_ONLY")
         required.append(b"SPRESENSE_M1_OUTPUT=WRITE_REJECTED")
     return [
         marker.decode("ascii") for marker in required
@@ -635,6 +649,9 @@ def main(default_vehicle: str = "copter") -> int:
             "driving_verified": False,
             "output_write_rejection_marker_received": (
                 b"SPRESENSE_M1_OUTPUT=WRITE_REJECTED" in diagnostics
+            ),
+            "shadow_output_marker_received": (
+                b"SPRESENSE_M1_OUTPUT=SHADOW_ONLY" in diagnostics
             ),
             "regular_front_steering_profile": args.vehicle == "rover",
             "manual_control_rc_override_verified": manual_channels is not None,
