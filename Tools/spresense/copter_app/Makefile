@@ -14,6 +14,19 @@ M1_REPO_ROOT := $(abspath $(SDKDIR)/../../..)
 M1_COPTER_APP_DIR := $(M1_REPO_ROOT)/Tools/spresense/copter_app
 SPRESENSE_HAL_DIR := $(M1_REPO_ROOT)/libraries/AP_HAL_Spresense
 
+# Keep the HAL objects out of the SDK-wide libapps archive.  The Sony SDK
+# rebuilds that archive from multiple subtrees, so an incremental or parallel
+# build can otherwise discard objects contributed by this external app before
+# the final NuttX link.
+M1_COPTER_SDK_BUILD_DIR := \
+	$(M1_REPO_ROOT)/build/spresense-m1-copter-link-sdk
+BIN := $(M1_COPTER_SDK_BUILD_DIR)/libAP_HAL_Spresense_sdk.a
+
+$(M1_COPTER_SDK_BUILD_DIR):
+	$(Q) mkdir -p $@
+
+.built: | $(M1_COPTER_SDK_BUILD_DIR)
+
 VPATH += :$(SPRESENSE_HAL_DIR)
 
 CXXSRCS = HAL_Spresense_Class.cpp

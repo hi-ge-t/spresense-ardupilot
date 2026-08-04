@@ -238,6 +238,10 @@ def main() -> int:
     python = shutil.which("python3.11") or sys.executable
     archive = root / "build/spresense/lib/bin/libarducopter.a"
     libraries = root / "build/spresense/lib/libArduCopter_libs.a"
+    hal_sdk_archive = (
+        root / "build/spresense-m1-copter-link-sdk"
+        / "libAP_HAL_Spresense_sdk.a"
+    )
     artifact_dir = root / ARTIFACT_DIRECTORY
     env = os.environ.copy()
     env["PATH"] = f"{toolchain}:{env.get('PATH', '')}"
@@ -321,7 +325,25 @@ def main() -> int:
         libsupcxx = compiler_library(
             cxx, "--print-file-name=libsupc++.a", root, env
         )
-        extra_libraries = (archive, libraries, libsupcxx, libgcc)
+        # Application.mk uses a .built marker and does not know if another SDK
+        # subtree recreated libapps.a.  The HAL has a dedicated archive; force
+        # its archive step on every firmware link so --reuse-build is equally
+        # deterministic.
+        for generated in (
+            root / "Tools/spresense/copter_app/.built",
+            root / "Tools/spresense/.built",
+            hal_sdk_archive,
+            Path(f"{hal_sdk_archive}.lock"),
+        ):
+            generated.unlink(missing_ok=True)
+
+        extra_libraries = (
+            archive,
+            libraries,
+            hal_sdk_archive,
+            libsupcxx,
+            libgcc,
+        )
         env["EXTRA_LIBS"] = " ".join(str(path) for path in extra_libraries)
         make_args = [f"COMPILER_RT_LIB={libgcc}"]
         prepare_generated_newlib_link(nuttx)
@@ -340,6 +362,10 @@ def main() -> int:
             cwd=root,
             env=env,
         )
+        if not hal_sdk_archive.is_file():
+            raise RuntimeError(
+                f"AP_HAL_Spresense SDK archive is missing: {hal_sdk_archive}"
+            )
 
         sources = {
             "nuttx.spk": sdk / "nuttx.spk",

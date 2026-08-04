@@ -328,7 +328,10 @@ def main() -> int:
         failures,
         "copter-app",
         app_makefile,
-        ("CXXSRCS += SensorBridge.cpp",),
+        (
+            "CXXSRCS += SensorBridge.cpp",
+            "BIN := $(M1_COPTER_SDK_BUILD_DIR)/libAP_HAL_Spresense_sdk.a",
+        ),
     )
 
     build = (
@@ -343,6 +346,7 @@ def main() -> int:
             "arducopter_spresense_main",
             "libarducopter.a",
             "libArduCopter_libs.a",
+            "libAP_HAL_Spresense_sdk.a",
             "m1.physical_write_expected",
             "m1.sensor.hal_integration",
         ),
