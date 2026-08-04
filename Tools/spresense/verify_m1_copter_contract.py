@@ -209,7 +209,10 @@ def main() -> int:
             "gnss_init_thread",
             "start_gnss_init_thread",
             "run_gnss_reader()",
-            "PWBIMU_STARTUP_POLL_TIMEOUT_MS = 1000",
+            "PWBIMU_READER_PRIORITY = 185",
+            "PWBIMU_READER_STACK_BYTES = 4096U",
+            "pwbimu_reader_thread",
+            "start_pwbimu_reader_thread",
             "gnss_position",
             "PTHREAD_EXPLICIT_SCHED",
             "SNIOC_SSAMPRATE",
@@ -222,16 +225,15 @@ def main() -> int:
             "return block_gnss_notification();",
             "sigtimedwait",
             "pthread_mutex_trylock(&gnss_sample_mutex)",
-            "PWBIMU_STARTUP_POLL_TIMEOUT_MS",
-            "ready_to_read(pwbimu_fd, PWBIMU_STARTUP_POLL_TIMEOUT_MS)",
-            "O_NONBLOCK",
+            "pthread_mutex_trylock(&pwbimu_sample_mutex)",
+            "PWBIMU_STREAM_READY",
             "return false;",
         ),
     )
     pwbimu_read = sensor_bridge.split(
         "Spresense::SensorReadStatus Spresense::pwbimu_read", 1
     )[1].split("#else", 1)[0]
-    if "ready_to_read(" in pwbimu_read or "poll(" in pwbimu_read:
+    if "read(" in pwbimu_read or "poll(" in pwbimu_read:
         failures.append(
             "sensor-bridge: steady-state PWBIMU read must remain nonblocking"
         )

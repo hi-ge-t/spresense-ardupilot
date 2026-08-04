@@ -14,7 +14,6 @@ constexpr uint16_t UNKNOWN_DOP = UINT16_MAX;
 constexpr int GNSS_NOTIFICATION_SIGNAL = 18;
 constexpr uint32_t GNSS_NOTIFICATION_WAIT_MS = 1250U;
 constexpr uint32_t GNSS_READER_YIELD_US = 1000U;
-constexpr int PWBIMU_STARTUP_POLL_TIMEOUT_MS = 1000;
 #endif
 
 bool finite_position(const Spresense::GnssRawSample &raw)
@@ -145,14 +144,11 @@ bool Spresense::convert_imu_sample(const ImuRawSample &raw,
 
 #if defined(__NuttX__)
 
-#include <arch/board/board.h>
 #include <arch/chip/gnss.h>
-#include <arch/chip/pin.h>
 #include <nuttx/sensors/cxd5602pwbimu.h>
 
 #include <errno.h>
 #include <fcntl.h>
-#include <poll.h>
 #include <pthread.h>
 #include <sched.h>
 #include <signal.h>
@@ -180,15 +176,12 @@ bool gnss_notification_reported;
 bool gnss_sample_reported;
 bool gnss_attach_reported;
 bool gnss_consumed_reported;
-bool pwbimu_read_after_gnss_reported;
-bool pwbimu_return_after_gnss_reported;
-bool pwbimu_sample_after_gnss_reported;
-bool pwbimu_eagain_after_gnss_reported;
-bool pwbimu_first_empty_after_gnss_reported;
-bool pwbimu_empty_count_after_gnss_reported;
-bool pwbimu_irq_rearm_reported;
-uint32_t pwbimu_eagain_after_gnss_count;
-uint32_t pwbimu_empty_after_gnss_count;
+pthread_mutex_t pwbimu_sample_mutex = PTHREAD_MUTEX_INITIALIZER;
+Spresense::ImuSample pwbimu_latest_sample {};
+uint32_t pwbimu_sample_sequence;
+uint32_t pwbimu_consumed_sequence;
+uint8_t pwbimu_stream_state;
+bool pwbimu_sample_reported;
 constexpr uint8_t GNSS_INIT_IDLE = 0U;
 constexpr uint8_t GNSS_INIT_STARTING = 1U;
 constexpr uint8_t GNSS_INIT_READY = 2U;
@@ -197,6 +190,12 @@ constexpr int GNSS_INIT_PRIORITY = 110;
 // Match the other Spresense worker stacks.  Sony's 1328-byte PVT snapshot is
 // static, as in the hardware-verified bounded GCS probe, rather than local.
 constexpr size_t GNSS_INIT_STACK_BYTES = 8192U;
+constexpr uint8_t PWBIMU_STREAM_IDLE = 0U;
+constexpr uint8_t PWBIMU_STREAM_STARTING = 1U;
+constexpr uint8_t PWBIMU_STREAM_READY = 2U;
+constexpr uint8_t PWBIMU_STREAM_FAILED = 3U;
+constexpr int PWBIMU_READER_PRIORITY = 185;
+constexpr size_t PWBIMU_READER_STACK_BYTES = 4096U;
 
 enum class GnssWaitStatus : uint8_t {
     NOTIFIED,
@@ -258,16 +257,6 @@ GnssWaitStatus wait_gnss_notification()
         return GnssWaitStatus::TIMEOUT;
     }
     return GnssWaitStatus::ERROR;
-}
-
-bool ready_to_read(int fd, int timeout_ms)
-{
-    struct pollfd descriptor {fd, POLLIN, 0};
-    int result;
-    do {
-        result = poll(&descriptor, 1, timeout_ms);
-    } while (result < 0 && errno == EINTR);
-    return result > 0 && (descriptor.revents & POLLIN) != 0;
 }
 
 void close_device(int &fd)
@@ -481,6 +470,83 @@ bool start_gnss_init_thread()
     return result == 0;
 }
 
+bool publish_pwbimu_sample(const cxd5602pwbimu_data_t &data)
+{
+    // Sony's PWBIMU stream supplies gyro in rad/s and acceleration in g.
+    // AP_InertialSensor requires rad/s and m/s^2.
+    const Spresense::ImuRawSample raw {
+        data.timestamp,
+        data.temp,
+        data.gx,
+        data.gy,
+        data.gz,
+        data.ax,
+        data.ay,
+        data.az,
+    };
+    Spresense::ImuSample sample {};
+    if (!Spresense::convert_imu_sample(raw, sample) ||
+        pthread_mutex_lock(&pwbimu_sample_mutex) != 0) {
+        return false;
+    }
+    pwbimu_latest_sample = sample;
+    pwbimu_sample_sequence++;
+    return pthread_mutex_unlock(&pwbimu_sample_mutex) == 0;
+}
+
+void *pwbimu_reader_thread(void *)
+{
+    __atomic_store_n(
+        &pwbimu_stream_state, PWBIMU_STREAM_READY, __ATOMIC_RELEASE);
+    for (;;) {
+        cxd5602pwbimu_data_t data {};
+        ssize_t length;
+        do {
+            length = read(pwbimu_fd, &data, sizeof(data));
+        } while (length < 0 && errno == EINTR);
+        if (length != static_cast<ssize_t>(sizeof(data)) ||
+            !publish_pwbimu_sample(data)) {
+            gnss_marker("SPRESENSE_M1_PWBIMU=STREAM_FAIL\n");
+            __atomic_store_n(
+                &pwbimu_stream_state, PWBIMU_STREAM_FAILED,
+                __ATOMIC_RELEASE);
+            return nullptr;
+        }
+        if (!pwbimu_sample_reported) {
+            pwbimu_sample_reported = true;
+            gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE\n");
+        }
+    }
+}
+
+bool start_pwbimu_reader_thread()
+{
+    pthread_attr_t attributes {};
+    if (pthread_attr_init(&attributes) != 0) {
+        return false;
+    }
+
+    struct sched_param scheduling {};
+    scheduling.sched_priority = PWBIMU_READER_PRIORITY;
+    const size_t stack_size = PWBIMU_READER_STACK_BYTES < PTHREAD_STACK_MIN
+        ? PTHREAD_STACK_MIN : PWBIMU_READER_STACK_BYTES;
+    const bool configured =
+        pthread_attr_setstacksize(&attributes, stack_size) == 0 &&
+        pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED) == 0 &&
+        pthread_attr_setschedpolicy(&attributes, SCHED_FIFO) == 0 &&
+        pthread_attr_setschedparam(&attributes, &scheduling) == 0 &&
+        pthread_attr_setinheritsched(&attributes, PTHREAD_EXPLICIT_SCHED) == 0;
+    pthread_t thread {};
+    const int result = configured
+        ? pthread_create(&thread, &attributes, pwbimu_reader_thread, nullptr)
+        : -1;
+    (void)pthread_attr_destroy(&attributes);
+    if (result == 0) {
+        (void)pthread_setname_np(thread, "ap-pwbimu");
+    }
+    return result == 0;
+}
+
 } // namespace
 
 bool Spresense::sensor_bridge_platform_ready()
@@ -559,11 +625,16 @@ Spresense::SensorReadStatus Spresense::gnss_read(GnssSample &sample)
 
 bool Spresense::pwbimu_start(uint16_t sample_rate_hz)
 {
-    if (pwbimu_fd >= 0) {
-        return true;
+    const uint8_t state = __atomic_load_n(
+        &pwbimu_stream_state, __ATOMIC_ACQUIRE);
+    if (state == PWBIMU_STREAM_STARTING || state == PWBIMU_STREAM_READY) {
+        return pwbimu_fd >= 0;
+    }
+    if (state == PWBIMU_STREAM_FAILED) {
+        return false;
     }
     pwbimu_fd = open(CONFIG_SPRESENSE_M1_COPTER_PWBIMU_DEVICE,
-                     O_RDONLY | O_NONBLOCK);
+                     O_RDONLY);
     if (pwbimu_fd < 0) {
         gnss_marker("SPRESENSE_M1_PWBIMU=OPEN_FAILED\n");
         return false;
@@ -571,12 +642,9 @@ bool Spresense::pwbimu_start(uint16_t sample_rate_hz)
     gnss_marker("SPRESENSE_M1_PWBIMU=OPEN_OK\n");
 
     const int board_count = ioctl(pwbimu_fd, SNIOC_GETBNUM, 0UL);
-    if (board_count == 1) {
-        gnss_marker("SPRESENSE_M1_PWBIMU=BOARD_1\n");
-    } else if (board_count == 2) {
-        gnss_marker("SPRESENSE_M1_PWBIMU=BOARD_2\n");
-    } else {
-        gnss_marker("SPRESENSE_M1_PWBIMU=BOARD_UNKNOWN\n");
+    if (board_count != 1 && board_count != 2) {
+        close_device(pwbimu_fd);
+        return false;
     }
 
     cxd5602pwbimu_range_t range {2, 125};
@@ -606,100 +674,42 @@ bool Spresense::pwbimu_start(uint16_t sample_rate_hz)
     }
     gnss_marker("SPRESENSE_M1_PWBIMU=ENABLE_OK\n");
 
-    // Yield once after enabling the device so Sony's HPWORK producer can
-    // publish the initial sample during Copter setup.  Do not use poll() in
-    // the steady-state AP_InertialSensor path: the driver registers a single
-    // poll waiter while taking its device lock, and repeated setup/teardown
-    // from wait_for_sample() can block the flight-control thread.  The file
-    // remains O_NONBLOCK, so a direct read below returns EAGAIN immediately.
-    const bool poll_ready = ready_to_read(pwbimu_fd, PWBIMU_STARTUP_POLL_TIMEOUT_MS);
-    gnss_marker(poll_ready
-        ? "SPRESENSE_M1_PWBIMU=POLL_READY\n"
-        : "SPRESENSE_M1_PWBIMU=POLL_TIMEOUT_OR_ERROR\n");
-    gnss_marker(board_gpio_read(PIN_EMMC_DATA3) != 0
-        ? "SPRESENSE_M1_PWBIMU=DRDY_HIGH\n"
-        : "SPRESENSE_M1_PWBIMU=DRDY_LOW\n");
+    __atomic_store_n(
+        &pwbimu_stream_state, PWBIMU_STREAM_STARTING, __ATOMIC_RELEASE);
+    if (!start_pwbimu_reader_thread()) {
+        (void)checked_ioctl(pwbimu_fd, SNIOC_ENABLE, 0U);
+        close_device(pwbimu_fd);
+        __atomic_store_n(
+            &pwbimu_stream_state, PWBIMU_STREAM_FAILED, __ATOMIC_RELEASE);
+        return false;
+    }
     return true;
 }
 
 Spresense::SensorReadStatus Spresense::pwbimu_read(ImuSample &sample)
 {
-    if (pwbimu_fd < 0) {
+    const uint8_t state = __atomic_load_n(
+        &pwbimu_stream_state, __ATOMIC_ACQUIRE);
+    if (state == PWBIMU_STREAM_FAILED || pwbimu_fd < 0) {
         return SensorReadStatus::ERROR;
     }
-
-    const bool gnss_started = __atomic_load_n(
-        &gnss_init_state, __ATOMIC_ACQUIRE) != GNSS_INIT_IDLE;
-    if (gnss_started && !pwbimu_read_after_gnss_reported) {
-        pwbimu_read_after_gnss_reported = true;
-        gnss_marker("SPRESENSE_M1_PWBIMU=READ_AFTER_GNSS\n");
-    }
-
-    cxd5602pwbimu_data_t data {};
-    ssize_t length;
-    do {
-        length = read(pwbimu_fd, &data, sizeof(data));
-    } while (length < 0 && errno == EINTR);
-    if (gnss_started && !pwbimu_return_after_gnss_reported) {
-        pwbimu_return_after_gnss_reported = true;
-        gnss_marker("SPRESENSE_M1_PWBIMU=READ_RETURNED\n");
-    }
-    if (gnss_started && length != static_cast<ssize_t>(sizeof(data))) {
-        if (!pwbimu_first_empty_after_gnss_reported) {
-            pwbimu_first_empty_after_gnss_reported = true;
-            if (length < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-                gnss_marker("SPRESENSE_M1_PWBIMU=FIRST_EAGAIN\n");
-            } else if (length == 0) {
-                gnss_marker("SPRESENSE_M1_PWBIMU=FIRST_ZERO\n");
-            } else {
-                gnss_marker("SPRESENSE_M1_PWBIMU=FIRST_SHORT_OR_ERROR\n");
-            }
-        }
-        if (++pwbimu_empty_after_gnss_count >= 100U &&
-            !pwbimu_empty_count_after_gnss_reported) {
-            pwbimu_empty_count_after_gnss_reported = true;
-            gnss_marker("SPRESENSE_M1_PWBIMU=EMPTY_100\n");
-            gnss_marker(board_gpio_read(PIN_EMMC_DATA3) != 0
-                ? "SPRESENSE_M1_PWBIMU=EMPTY_100_DRDY_HIGH\n"
-                : "SPRESENSE_M1_PWBIMU=EMPTY_100_DRDY_LOW\n");
-        }
-        if (!pwbimu_irq_rearm_reported &&
-            pwbimu_empty_after_gnss_count >= 100U) {
-            pwbimu_irq_rearm_reported = true;
-            board_gpio_int(PIN_EMMC_DATA3, true);
-            gnss_marker("SPRESENSE_M1_PWBIMU=IRQ_REARMED\n");
-        }
-    }
-    if (length < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-        if (gnss_started && ++pwbimu_eagain_after_gnss_count >= 1000U &&
-            !pwbimu_eagain_after_gnss_reported) {
-            pwbimu_eagain_after_gnss_reported = true;
-            gnss_marker("SPRESENSE_M1_PWBIMU=EAGAIN_1000\n");
-        }
+    if (state != PWBIMU_STREAM_READY) {
         return SensorReadStatus::NO_DATA;
     }
-    if (length != static_cast<ssize_t>(sizeof(data))) {
+    const int lock_result = pthread_mutex_trylock(&pwbimu_sample_mutex);
+    if (lock_result == EBUSY) {
+        return SensorReadStatus::NO_DATA;
+    }
+    if (lock_result != 0) {
         return SensorReadStatus::ERROR;
     }
-    if (gnss_started && !pwbimu_sample_after_gnss_reported) {
-        pwbimu_sample_after_gnss_reported = true;
-        gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE_AFTER_GNSS\n");
+    if (pwbimu_sample_sequence == pwbimu_consumed_sequence) {
+        (void)pthread_mutex_unlock(&pwbimu_sample_mutex);
+        return SensorReadStatus::NO_DATA;
     }
-
-    // Sony's PWBIMU stream supplies gyro in rad/s and acceleration in g.
-    // The SDK posture examples consume gyro directly and normalize gravity
-    // around 1 g; AP_InertialSensor requires rad/s and m/s^2.
-    const ImuRawSample raw {
-        data.timestamp,
-        data.temp,
-        data.gx,
-        data.gy,
-        data.gz,
-        data.ax,
-        data.ay,
-        data.az,
-    };
-    return convert_imu_sample(raw, sample)
+    sample = pwbimu_latest_sample;
+    pwbimu_consumed_sequence = pwbimu_sample_sequence;
+    return pthread_mutex_unlock(&pwbimu_sample_mutex) == 0
         ? SensorReadStatus::SAMPLE : SensorReadStatus::ERROR;
 }
 
