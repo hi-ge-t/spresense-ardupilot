@@ -1,5 +1,10 @@
 # Spresense M1 full-Copter link and safe-runtime evidence — 2026-08-03
 
+> Historical record: this document preserves the first full-Copter link and
+> boot/arming-denial run. The later AP_HAL GNSS/INS integration and its updated
+> HOLD boundary are recorded in
+> `SPRESENSE_M1_AP_HAL_SENSORS_20260804.md`.
+
 ## Scope
 
 This record covers the link of the real ArduCopter vehicle archive into a Sony
