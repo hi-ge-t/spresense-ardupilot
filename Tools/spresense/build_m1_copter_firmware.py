@@ -319,12 +319,6 @@ def main() -> int:
                 cwd=root,
                 env=env,
             )
-            generate_kconfig(root, sdk_root, env)
-            run(
-                [sys.executable, "tools/config.py", "default", CONFIG],
-                cwd=sdk,
-                env=env,
-            )
         # Even a reuse build must refresh the vehicle archive: the embedded
         # ArduPilot version contains the project commit and is part of the
         # runtime/artifact identity guard.
@@ -334,6 +328,13 @@ def main() -> int:
             cwd=root,
             env=env,
         )
+        if not arguments.reuse_build:
+            generate_kconfig(root, sdk_root, env)
+            run(
+                [sys.executable, "tools/config.py", "default", CONFIG],
+                cwd=sdk,
+                env=env,
+            )
         verify_config(nuttx / ".config")
 
         libgcc = compiler_library(
