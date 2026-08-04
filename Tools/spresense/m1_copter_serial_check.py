@@ -31,8 +31,8 @@ def capture_bad_data(message, diagnostics: bytearray) -> bool:
     else:
         data = bytes(data)
     diagnostics.extend(data)
-    if len(diagnostics) > 4096:
-        del diagnostics[:-4096]
+    if len(diagnostics) > 16384:
+        del diagnostics[:-16384]
     return True
 
 
@@ -129,6 +129,36 @@ def check_port(port: str) -> None:
         ["lsof", port], check=False, capture_output=True
     ).stdout:
         raise CheckError(f"serial port is already open: {port}")
+
+
+def reset_target(port: str, baud: int) -> None:
+    try:
+        import serial
+
+        reset_link = serial.Serial(port, baud, timeout=0.1)
+        reset_link.dtr = False
+        time.sleep(0.2)
+        reset_link.reset_input_buffer()
+        reset_link.dtr = True
+        reset_link.close()
+    except (ImportError, OSError) as error:
+        raise CheckError(f"DTR reset failed: {error}") from error
+
+
+def require_runtime_markers(diagnostics: bytearray) -> None:
+    required = (
+        b"SPRESENSE_M1_COPTER_BOOT=LOOP",
+        b"SPRESENSE_M1_PWBIMU=SAMPLE",
+        b"SPRESENSE_M1_GNSS=SAMPLE",
+        b"SPRESENSE_M1_GNSS=ATTACH",
+        b"SPRESENSE_M1_GNSS=CONSUMED",
+    )
+    missing = [
+        marker.decode("ascii") for marker in required
+        if marker not in diagnostics
+    ]
+    if missing:
+        raise CheckError("runtime marker missing: " + " | ".join(missing))
 
 
 def request_arm(
@@ -274,6 +304,11 @@ def main() -> int:
     parser.add_argument("--port", required=True)
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument(
+        "--reset-dtr",
+        action="store_true",
+        help="reset the target immediately before opening the MAVLink stream",
+    )
+    parser.add_argument(
         "--startup-timeout",
         type=float,
         default=150.0,
@@ -302,6 +337,8 @@ def main() -> int:
         )
         manifest = read_manifest(artifact_dir / "ARTIFACTS.manifest")
         check_port(args.port)
+        if args.reset_dtr:
+            reset_target(args.port, args.baud)
         link = mavutil.mavlink_connection(
             args.port,
             baud=args.baud,
@@ -343,6 +380,7 @@ def main() -> int:
             link, mavutil.mavlink, target_system, target_component, 2989,
             diagnostics,
         )
+        require_runtime_markers(diagnostics)
 
         evidence = {
             "format": "spresense-m1-copter-runtime-v2",
@@ -350,6 +388,7 @@ def main() -> int:
             "port": args.port,
             "baud": args.baud,
             "startup_timeout_seconds": args.startup_timeout,
+            "reset_dtr": args.reset_dtr,
             "profile": "spresense-m1-copter-link",
             "project_commit": manifest["project_commit"],
             "image_sha256": manifest["artifact.nuttx.spk.sha256"],
@@ -365,11 +404,15 @@ def main() -> int:
             "physical_outputs_verified": False,
             "gnss_driver_linked": True,
             "gnss_runtime_verified": True,
+            "gnss_sample_marker_received": True,
+            "gnss_attached_to_ap_gps": True,
+            "gnss_consumed_by_ap_gps": True,
             "gnss_fix_type": int(gps.fix_type),
             "gnss_satellites_visible": int(gps.satellites_visible),
             "gnss_accuracy_verified": False,
             "pwbimu_driver_linked": True,
             "pwbimu_runtime_verified": True,
+            "pwbimu_sample_marker_received": True,
             "pwbimu_first_time_usec": int(first_imu.time_usec),
             "pwbimu_second_time_usec": int(second_imu.time_usec),
             "pwbimu_first_axes": [int(value) for value in (

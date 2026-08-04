@@ -45,7 +45,30 @@ def main() -> int:
     else:
         raise AssertionError("unrelated serial error was swallowed")
 
-    print("spresense_m1_copter_serial_host=PASS transient_zero_read=tolerated")
+    diagnostics = bytearray(
+        b"SPRESENSE_M1_COPTER_BOOT=LOOP\n"
+        b"SPRESENSE_M1_PWBIMU=SAMPLE\n"
+        b"SPRESENSE_M1_GNSS=SAMPLE\n"
+        b"SPRESENSE_M1_GNSS=ATTACH\n"
+        b"SPRESENSE_M1_GNSS=CONSUMED\n"
+    )
+    checker.require_runtime_markers(diagnostics)
+    try:
+        checker.require_runtime_markers(
+            bytearray(b"SPRESENSE_M1_COPTER_BOOT=LOOP\n")
+        )
+    except checker.CheckError as error:
+        expect(
+            "SPRESENSE_M1_PWBIMU=SAMPLE" in str(error),
+            "missing runtime marker is reported",
+        )
+    else:
+        raise AssertionError("missing runtime markers were accepted")
+
+    print(
+        "spresense_m1_copter_serial_host=PASS "
+        "transient_zero_read=tolerated runtime_markers=required"
+    )
     return 0
 
 
