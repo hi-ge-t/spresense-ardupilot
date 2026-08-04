@@ -313,6 +313,59 @@ def request_message(
             "message interval request rejected: "
             f"message_id={message_id} result={acknowledgement.result}"
         )
+    # SET_MESSAGE_INTERVAL only changes the periodic stream. On Rover the next
+    # scheduled GPS packet can be delayed while parameters are being emitted,
+    # so request one immediate snapshot as a separate command. The following
+    # message wait tolerates either ACK-before-data or data-before-ACK order.
+    request_message_snapshot(link, mavlink, system, component, message_id)
+
+
+def request_message_snapshot(link, mavlink, system, component, message_id):
+    link.mav.command_long_send(
+        system,
+        component,
+        mavlink.MAV_CMD_REQUEST_MESSAGE,
+        0,
+        message_id,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    )
+
+
+def wait_requested_message(
+    link,
+    mavlink,
+    system,
+    component,
+    message_id,
+    message_type,
+    predicate,
+    timeout,
+    diagnostics,
+):
+    deadline = time.monotonic() + timeout
+    next_request = 0.0
+    while time.monotonic() < deadline:
+        now = time.monotonic()
+        if now >= next_request:
+            request_message_snapshot(
+                link, mavlink, system, component, message_id
+            )
+            next_request = now + 3.0
+        message = link.recv_match(blocking=True, timeout=0.5)
+        if capture_bad_data(message, diagnostics):
+            continue
+        if (
+            message is not None and
+            message.get_type() == message_type and
+            predicate(message)
+        ):
+            return message
+    raise CheckError(f"timeout waiting for {message_type}")
 
 
 def verify_sensor_messages(
@@ -326,14 +379,18 @@ def verify_sensor_messages(
         mavlink.MAVLINK_MSG_ID_GPS_RAW_INT,
         diagnostics,
     )
-    gps = wait_message(
+    gps = wait_requested_message(
         link,
+        mavlink,
+        system,
+        component,
+        mavlink.MAVLINK_MSG_ID_GPS_RAW_INT,
         "GPS_RAW_INT",
         lambda value: (
             value.get_srcSystem() == system and
             value.fix_type >= mavlink.GPS_FIX_TYPE_NO_FIX
         ),
-        30.0,
+        90.0,
         diagnostics,
     )
 
@@ -345,35 +402,51 @@ def verify_sensor_messages(
         mavlink.MAVLINK_MSG_ID_RAW_IMU,
         diagnostics,
     )
-    first = wait_message(
+    first = wait_requested_message(
         link,
+        mavlink,
+        system,
+        component,
+        mavlink.MAVLINK_MSG_ID_RAW_IMU,
         "RAW_IMU",
         lambda value: value.get_srcSystem() == system,
-        10.0,
-        diagnostics,
-    )
-    second = wait_message(
-        link,
-        "RAW_IMU",
-        lambda value: (
-            value.get_srcSystem() == system and
-            value.time_usec > first.time_usec
-        ),
-        10.0,
+        30.0,
         diagnostics,
     )
     first_axes = (
         first.xacc, first.yacc, first.zacc,
         first.xgyro, first.ygyro, first.zgyro,
     )
-    second_axes = (
-        second.xacc, second.yacc, second.zacc,
-        second.xgyro, second.ygyro, second.zgyro,
-    )
+    second = None
+    second_axes = first_axes
+    for _ in range(10):
+        time.sleep(0.25)
+        candidate = wait_requested_message(
+            link,
+            mavlink,
+            system,
+            component,
+            mavlink.MAVLINK_MSG_ID_RAW_IMU,
+            "RAW_IMU",
+            lambda value: (
+                value.get_srcSystem() == system and
+                value.time_usec > first.time_usec
+            ),
+            5.0,
+            diagnostics,
+        )
+        candidate_axes = (
+            candidate.xacc, candidate.yacc, candidate.zacc,
+            candidate.xgyro, candidate.ygyro, candidate.zgyro,
+        )
+        if candidate_axes != first_axes:
+            second = candidate
+            second_axes = candidate_axes
+            break
+    if second is None:
+        raise CheckError("AP_InertialSensor IMU sample did not change")
     if not any(first_axes) or not any(second_axes):
         raise CheckError("AP_InertialSensor reported an all-zero IMU sample")
-    if first_axes == second_axes:
-        raise CheckError("AP_InertialSensor IMU sample did not change")
     return gps, first, second
 
 
@@ -389,15 +462,19 @@ def verify_rover_manual_control(
         mavlink.MAVLINK_MSG_ID_RC_CHANNELS,
         diagnostics,
     )
-    channels = wait_message(
+    channels = wait_requested_message(
         link,
+        mavlink,
+        system,
+        component,
+        mavlink.MAVLINK_MSG_ID_RC_CHANNELS,
         "RC_CHANNELS",
         lambda value: (
             value.get_srcSystem() == system and
             value.chan1_raw > 1500 and
             value.chan3_raw > 1500
         ),
-        5.0,
+        15.0,
         diagnostics,
     )
     heartbeat = wait_message(
@@ -552,6 +629,10 @@ def main(default_vehicle: str = "copter") -> int:
             "forced_arm_result": forced_result,
             "armed_observed": False,
             "physical_outputs_verified": False,
+            "steering_signal_verified": False,
+            "throttle_signal_verified": False,
+            "steering_direction_verified": False,
+            "driving_verified": False,
             "output_write_rejection_marker_received": (
                 b"SPRESENSE_M1_OUTPUT=WRITE_REJECTED" in diagnostics
             ),
