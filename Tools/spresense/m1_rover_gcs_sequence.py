@@ -76,6 +76,72 @@ def wait_gcs_runtime_markers(link, diagnostics, timeout):
         )
 
 
+def wait_disarmed_heartbeats(
+    link, mavlink, system, diagnostics, required_count, timeout
+):
+    deadline = time.monotonic() + timeout
+    received = 0
+    while received < required_count and time.monotonic() < deadline:
+        heartbeat = link.recv_match(blocking=True, timeout=0.5)
+        if common.capture_bad_data(heartbeat, diagnostics):
+            continue
+        if (
+            heartbeat is None or
+            heartbeat.get_type() != "HEARTBEAT" or
+            heartbeat.get_srcSystem() != system
+        ):
+            continue
+        if heartbeat.base_mode & mavlink.MAV_MODE_FLAG_SAFETY_ARMED:
+            raise common.CheckError("Rover advertised armed state")
+        received += 1
+    if received != required_count:
+        raise common.CheckError("timeout waiting for disarmed heartbeats")
+
+
+def request_denied_arm(
+    link, mavlink, system, component, force_value, diagnostics
+):
+    for _ in range(3):
+        link.mav.command_long_send(
+            system,
+            component,
+            mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
+            0,
+            1,
+            force_value,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+        deadline = time.monotonic() + 8.0
+        while time.monotonic() < deadline:
+            message = link.recv_match(blocking=True, timeout=0.5)
+            if common.capture_bad_data(message, diagnostics):
+                continue
+            if message is None or message.get_srcSystem() != system:
+                continue
+            if message.get_type() == "HEARTBEAT":
+                if message.base_mode & mavlink.MAV_MODE_FLAG_SAFETY_ARMED:
+                    raise common.CheckError("Rover armed during ARM rejection test")
+                continue
+            if (
+                message.get_type() == "COMMAND_ACK" and
+                message.command == mavlink.MAV_CMD_COMPONENT_ARM_DISARM
+            ):
+                if message.result != mavlink.MAV_RESULT_FAILED:
+                    raise common.CheckError(
+                        "ARM did not reach the fail-closed Rover path: "
+                        f"result={message.result}"
+                    )
+                wait_disarmed_heartbeats(
+                    link, mavlink, system, diagnostics, 1, 3.0
+                )
+                return int(message.result)
+    raise common.CheckError("timeout waiting for denied ARM acknowledgement")
+
+
 def optional_gnss_snapshot(
     link, mavlink, system, component, diagnostics
 ):
@@ -303,29 +369,42 @@ def build_dry_run_mission(mavlink, latitude_e7, longitude_e7):
 
 
 def request_mode(link, mavlink, system, component, custom_mode, diagnostics):
-    link.mav.command_long_send(
-        system,
-        component,
-        mavlink.MAV_CMD_DO_SET_MODE,
-        0,
-        mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-        custom_mode,
-        0,
-        0,
-        0,
-        0,
-        0,
-    )
-    acknowledgement = common.wait_message(
-        link,
-        "COMMAND_ACK",
-        lambda value: (
-            value.get_srcSystem() == system and
-            value.command == mavlink.MAV_CMD_DO_SET_MODE
-        ),
-        8.0,
-        diagnostics,
-    )
+    acknowledgement = None
+    for _ in range(3):
+        link.mav.command_long_send(
+            system,
+            component,
+            mavlink.MAV_CMD_DO_SET_MODE,
+            0,
+            mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+            custom_mode,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+        deadline = time.monotonic() + 8.0
+        while time.monotonic() < deadline:
+            message = link.recv_match(blocking=True, timeout=0.5)
+            if common.capture_bad_data(message, diagnostics):
+                continue
+            if message is None or message.get_srcSystem() != system:
+                continue
+            if message.get_type() == "HEARTBEAT":
+                if message.base_mode & mavlink.MAV_MODE_FLAG_SAFETY_ARMED:
+                    raise common.CheckError("Rover armed during mode request")
+                continue
+            if (
+                message.get_type() == "COMMAND_ACK" and
+                message.command == mavlink.MAV_CMD_DO_SET_MODE
+            ):
+                acknowledgement = message
+                break
+        if acknowledgement is not None:
+            break
+    if acknowledgement is None:
+        raise common.CheckError("timeout waiting for mode acknowledgement")
     accepted = acknowledgement.result == mavlink.MAV_RESULT_ACCEPTED
     entered = False
     if accepted:
@@ -383,6 +462,20 @@ def parse_arguments():
     return parser.parse_args()
 
 
+def write_evidence(root, output_argument, evidence):
+    if output_argument is None:
+        return
+    output = (
+        output_argument if output_argument.is_absolute()
+        else root / output_argument
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def main():
     args = parse_arguments()
     root = Path(__file__).resolve().parents[2]
@@ -392,8 +485,15 @@ def main():
     backup = None
     mission_modified = False
     mission_restored = False
+    mission_upload_completed = False
+    mission_download_verified = False
     system = None
     component = None
+    manifest = None
+    runtime_commit = None
+    test_mission = []
+    normal_arm = None
+    forced_arm = None
     try:
         from pymavlink import mavutil
 
@@ -439,13 +539,10 @@ def main():
             mavutil.mavlink.MAV_STATE_ACTIVE,
         )
 
-        normal_arm = common.request_arm(
-            link, mavutil.mavlink, system, component, 0, diagnostics
-        )
-        forced_arm = common.request_arm(
-            link, mavutil.mavlink, system, component, 2989, diagnostics
-        )
         wait_gcs_runtime_markers(link, diagnostics, 30.0)
+        wait_disarmed_heartbeats(
+            link, mavutil.mavlink, system, diagnostics, 3, 10.0
+        )
         gps = optional_gnss_snapshot(
             link, mavutil.mavlink, system, component, diagnostics
         )
@@ -465,11 +562,20 @@ def main():
             link, mavutil.mavlink, system, component,
             test_mission, diagnostics,
         )
+        mission_upload_completed = True
         downloaded = download_mission(
             link, mavutil.mavlink, system, component, diagnostics
         )
         if not missions_equal(test_mission, downloaded):
             raise common.CheckError("downloaded mission differs from upload")
+        mission_download_verified = True
+
+        normal_arm = request_denied_arm(
+            link, mavutil.mavlink, system, component, 0, diagnostics
+        )
+        forced_arm = request_denied_arm(
+            link, mavutil.mavlink, system, component, 2989, diagnostics
+        )
 
         mode_map = mavutil.mode_mapping_byname(
             mavutil.mavlink.MAV_TYPE_GROUND_ROVER
@@ -549,13 +655,7 @@ def main():
             "gnss_fix_type": int(gps.fix_type) if gps is not None else None,
             "gnss_accuracy_verified": False,
         }
-        if args.output is not None:
-            output = args.output if args.output.is_absolute() else root / args.output
-            output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_text(
-                json.dumps(evidence, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
+        write_evidence(root, args.output, evidence)
     except (common.CheckError, ImportError, OSError, UnicodeError) as error:
         restoration_error = None
         hold_error = None
@@ -603,6 +703,32 @@ def main():
             )
         if hold_error is not None:
             print(f"hold_restoration=FAIL reason={hold_error}", file=sys.stderr)
+        if manifest is not None:
+            failure_evidence = {
+                "format": "spresense-m1-rover-gcs-sequence-v1",
+                "captured_at": datetime.now(timezone.utc).isoformat(),
+                "profile": common.VEHICLES["rover"]["profile"],
+                "project_commit": manifest["project_commit"],
+                "runtime_commit": runtime_commit,
+                "image_sha256": manifest["artifact.nuttx.spk.sha256"],
+                "sequence_passed": False,
+                "failure_reason": str(error),
+                "armed_observed": False,
+                "normal_arm_result": normal_arm,
+                "forced_arm_result": forced_arm,
+                "mission_backup_count": len(backup) if backup is not None else None,
+                "mission_test_count": len(test_mission),
+                "mission_upload_completed": mission_upload_completed,
+                "mission_download_verified": mission_download_verified,
+                "mission_restored": mission_restored,
+                "hold_restoration_verified": hold_error is None,
+                "physical_outputs_verified": False,
+                "physical_write_expected": 0,
+                "autonomous_motion_verified": False,
+                "autonomous_mission_completion_verified": False,
+                "sensor_runtime_verified_in_sequence": False,
+            }
+            write_evidence(root, args.output, failure_evidence)
         return 1
     finally:
         if link is not None:

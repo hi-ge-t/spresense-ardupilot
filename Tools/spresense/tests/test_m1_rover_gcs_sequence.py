@@ -19,7 +19,10 @@ class FakeMavlink:
     MAV_FRAME_MISSION = 2
     MAV_CMD_NAV_WAYPOINT = 16
     MAV_CMD_DO_CHANGE_SPEED = 178
+    MAV_CMD_COMPONENT_ARM_DISARM = 400
+    MAV_MODE_FLAG_SAFETY_ARMED = 128
     MAV_MISSION_ACCEPTED = 0
+    MAV_RESULT_FAILED = 4
 
 
 class FakeMessage:
@@ -127,6 +130,16 @@ class FakeMav:
                 )
             )
 
+    def command_long_send(self, system, component, command, confirmation, *params):
+        del system, component, confirmation, params
+        self.link.messages.extend([
+            FakeMessage(
+                "COMMAND_ACK", command=command,
+                result=FakeMavlink.MAV_RESULT_FAILED,
+            ),
+            FakeMessage("HEARTBEAT", base_mode=0),
+        ])
+
 
 class FakeLink:
     def __init__(self, mission):
@@ -151,6 +164,18 @@ def main():
         mavlink, 400713770, -1052297900
     )
     link = FakeLink(original)
+    link.messages.extend([
+        FakeMessage("HEARTBEAT", base_mode=0),
+        FakeMessage("HEARTBEAT", base_mode=0),
+    ])
+    sequence.wait_disarmed_heartbeats(
+        link, mavlink, 1, diagnostics, 2, 1.0
+    )
+    arm_result = sequence.request_denied_arm(
+        link, mavlink, 1, 1, 0, diagnostics
+    )
+    if arm_result != mavlink.MAV_RESULT_FAILED:
+        raise AssertionError("fail-closed ARM result was not preserved")
     downloaded = sequence.download_mission(
         link, mavlink, 1, 1, diagnostics
     )
