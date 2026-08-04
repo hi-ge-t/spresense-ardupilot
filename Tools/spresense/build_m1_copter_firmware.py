@@ -464,6 +464,9 @@ def main() -> int:
             "m1.pwbimu.sample_rate_hz": "60",
             "m1.pwbimu.sample_rate_status": "bringup-only-hardware-HOLD",
             "m1.pwbimu.orientation": "ROTATION_NONE-hardware-HOLD",
+            "m1.pwbimu.recovery": (
+                "single-stream-restart-plus-drdy-rearm-then-fail"
+            ),
             "m1.sensor.hal_integration": "GNSS+INS",
             "m1.sensor.runtime": "hardware-HOLD",
             "m1.sensor_fallback": "disabled",

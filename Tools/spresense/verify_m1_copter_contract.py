@@ -224,6 +224,7 @@ def main() -> int:
             "PWBIMU_STREAM_FAILED",
             "board_gpio_int(PIN_EMMC_DATA3, false)",
             "board_gpio_int(PIN_EMMC_DATA3, true)",
+            "SPRESENSE_M1_PWBIMU=RESTART_OK",
             "gnss_position",
             "PTHREAD_EXPLICIT_SCHED",
             "SNIOC_SSAMPRATE",
