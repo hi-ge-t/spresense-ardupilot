@@ -17,13 +17,13 @@ def expect(condition, message):
 
 
 def main() -> int:
-    commit = "e4382f725e63acfd246078b2d2a05cee288ac49d"
+    commit = "0123456789abcdef0123456789abcdef01234567"
     with tempfile.TemporaryDirectory(
         prefix="spresense-m1-build-guard-"
     ) as temporary_directory:
         firmware = Path(temporary_directory) / "nuttx"
         firmware.write_bytes(
-            b"prefix\0ArduCopter V4.7.0 (e4382f72)\0suffix"
+            b"prefix\0ArduCopter V4.7.0 (01234567)\0suffix"
         )
         builder.verify_embedded_commit(firmware, commit)
 
