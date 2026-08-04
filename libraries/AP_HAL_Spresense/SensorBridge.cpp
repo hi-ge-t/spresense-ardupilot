@@ -182,6 +182,7 @@ uint32_t pwbimu_sample_sequence;
 uint32_t pwbimu_consumed_sequence;
 uint8_t pwbimu_stream_state;
 bool pwbimu_sample_reported;
+uint32_t pwbimu_reader_sample_count;
 constexpr uint8_t GNSS_INIT_IDLE = 0U;
 constexpr uint8_t GNSS_INIT_STARTING = 1U;
 constexpr uint8_t GNSS_INIT_READY = 2U;
@@ -515,6 +516,14 @@ void *pwbimu_reader_thread(void *)
         if (!pwbimu_sample_reported) {
             pwbimu_sample_reported = true;
             gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE\n");
+        }
+        pwbimu_reader_sample_count++;
+        if (pwbimu_reader_sample_count == 60U) {
+            gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE_60\n");
+        } else if (pwbimu_reader_sample_count == 600U) {
+            gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE_600\n");
+        } else if (pwbimu_reader_sample_count == 1200U) {
+            gnss_marker("SPRESENSE_M1_PWBIMU=SAMPLE_1200\n");
         }
     }
 }
