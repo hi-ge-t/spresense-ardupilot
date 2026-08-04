@@ -283,11 +283,33 @@ def main() -> int:
             "SERVO1_FUNCTION=26",
             "SERVO3_FUNCTION=70",
             "evidence/SPRESENSE_M1_ROVER_20260804.md",
+            "evidence/SPRESENSE_M1_ROVER_GCS_AUTONOMY_20260804.md",
             "CH1=1800, CH3=1700 dry-run",
+            "MISSION_COUNT",
+            "b455243f80",
             "GNSS fix/accuracy HOLD",
             "no automatic device, sensor or storage fallback",
             "HAL_SPRESENSE_OUTPUT_DISABLED=1",
             "It does not mean the car can be driven yet.",
+        ),
+    )
+
+    autonomy_evidence = (
+        root / "docs/evidence/SPRESENSE_M1_ROVER_GCS_AUTONOMY_20260804.md"
+    ).read_text(encoding="utf-8")
+    require_tokens(
+        failures,
+        "gcs-autonomy-evidence",
+        autonomy_evidence,
+        (
+            "b455243f80f1906cd9d2fe77273f019f09bc9add",
+            "31a5aaddb177a54e5bedee9f0a6cd351aea361f9",
+            "ead174956de5a15486279026b9ae15ae992ec0fb81546489de001aa496bce6ab",
+            "MISSION_COUNT",
+            "no mission on the board was modified",
+            "driving_verified=false",
+            "not a full power cycle",
+            "expected physical write count is zero",
         ),
     )
 

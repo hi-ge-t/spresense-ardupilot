@@ -17,7 +17,10 @@
 > archive for a conventional front-steering vehicle: CH1/GroundSteering and
 > CH3/Throttle. A combined Multi-IMU/GNSS Add-on hardware gate confirmed the
 > ground-rover heartbeat, live sensor ingestion, CH1/CH3 dry-run mapping and
-> normal/forced arming rejection. It has no physical PWM/CAN backend; GNSS fix,
+> normal/forced arming rejection. A tested-code SITL run also completed the
+> full GCS upload/ARM/AUTO/waypoint/disarm sequence. The latest hardware GCS
+> mission round-trip remains HOLD after a warm-reset stream failure, with no
+> mission modified. It has no physical PWM/CAN backend; GNSS fix,
 > steering/ESC signals, driving and control performance remain HOLD. See
 > [Spresense regular-front-steering Rover](docs/SPRESENSE_ROVER.md).
 

@@ -6,9 +6,13 @@ This profile links the full ArduRover 4.7.0 vehicle archive to the existing
 output-disabled `AP_HAL_Spresense`. It targets a conventional four-wheel RC
 car with front steering and rear-wheel throttle. It is a software and
 output-disabled hardware feasibility artifact, not drive-ready firmware. One
-combined-board hardware gate has passed with Multi-IMU and GNSS Add-on
-connected; the retained evidence is
-[Spresense M1 Rover evidence](evidence/SPRESENSE_M1_ROVER_20260804.md).
+combined-board sensor/command hardware gate passed on the original Rover
+profile. The latest software adds fail-closed shadow output, a reversible GCS
+mission-protocol test and an ArduPilot SITL autonomy sequence. The tested-code
+SITL sequence passes, while the latest hardware GCS mission round-trip remains
+HOLD after a warm-reset sensor-stream failure. See the
+[original hardware evidence](evidence/SPRESENSE_M1_ROVER_20260804.md) and the
+[GCS/autonomy evidence](evidence/SPRESENSE_M1_ROVER_GCS_AUTONOMY_20260804.md).
 
 The selected upstream frame path is the standard ArduRover regular frame:
 
@@ -27,8 +31,13 @@ The profile is intentionally unable to move a vehicle:
 
 - `AP_Arming_Rover::arm()` rejects normal and forced arming when
   `HAL_SPRESENSE_OUTPUT_DISABLED=1`.
-- `AP_HAL_Spresense::RCOutput` records and rejects output requests. It has no
-  `/dev/pwm`, DShot or CAN backend and always reports zero physical writes.
+- `AP_HAL_Spresense::RCOutput` records requested period/PWM values in a
+  16-channel RAM-only shadow state so GCS readback and host tests can inspect
+  Rover's logical outputs. It has no `/dev/pwm`, DShot or CAN backend, rejects
+  every write request and always reports zero physical writes.
+- `cork()`/`push()` update the shadow frame atomically but do not create an
+  electrical signal. Runtime markers distinguish `SHADOW_ONLY` from
+  `WRITE_REJECTED`.
 - Sony NuttX is built with `CXD56_PWM` and generic `PWM` disabled.
 - MAVLink `MANUAL_CONTROL` may update Rover's CH1/CH3 RC overrides for a
   dry-run. This proves the input mapping only; it cannot enable throttle or a
@@ -123,23 +132,73 @@ The runtime gate requires all of the following in one session:
 The CH1/CH3 check is a dry-run input-path result. It does not prove servo pulse
 width, ESC behavior, steering direction, vehicle geometry or motion.
 
+## Reversible GCS mission-protocol gate
+
+`m1_rover_gcs_sequence.py` is an instrumented MAVLink GCS client for the
+output-disabled hardware gate. It verifies the ground-rover heartbeat and
+disarmed state, backs up the current mission, uploads and downloads a bounded
+three-item test mission, requests AUTO only while disarmed, checks shadow
+`SERVO_OUTPUT_RAW` readback, and restores the original mission. It also sends
+normal and forced ARM requests only to prove that both remain denied. A
+failure after mission modification enters the restore path before evidence is
+written.
+
+```sh
+python3 Tools/spresense/m1_rover_gcs_sequence.py \
+  --port /dev/cu.usbserial-XXXXXXXX \
+  --reset-dtr \
+  --startup-timeout 180 \
+  --output build/spresense-m1-rover-link-artifacts/gcs-sequence-evidence.json
+```
+
+This checks the same MAVLink mission/command protocol used by a GCS, but is not
+a separate Mission Planner or QGroundControl GUI test. It never claims sensor
+health from heartbeat alone, cannot arm the vehicle and cannot cause motion.
+
+The 2026-08-04 run on firmware `31a5aadd` received the ground-rover heartbeat
+and matched the boot identity, but timed out waiting for `MISSION_COUNT`. The
+mission was never downloaded or modified. This hardware gate is therefore
+HOLD, not PASS. A complete board power cycle and cold-boot rerun are required;
+a DTR reset is not equivalent to removing and reapplying board power.
+
+## SITL GCS/autonomy sequence
+
+The standard ArduPilot Rover `DriveMission` test is the executable autonomy
+gate. It rebuilds Rover SITL from the current source tree and performs mission
+upload, software ARM, AUTO entry, waypoint progression, mission completion and
+DISARM:
+
+```sh
+python3 Tools/spresense/run_m1_rover_sitl_autonomy.py \
+  --output build/spresense-m1-rover-link-artifacts/sitl-autonomy-evidence.json
+```
+
+This sequence passed at `b455243f80`. It proves the upstream regular-front-
+steering navigation sequence in simulation and the test harness around it. It
+does not test Spresense sensor timing, electrical outputs or vehicle driving.
+
 ## Evidence and HOLD table
 
 | Item | Current evidence | Status |
 |---|---|---|
-| Full Rover archive and regular frame path | host contract plus Sony cross-build | PASS at `a200430c` |
+| Full Rover archive and regular frame path | host contract plus Sony cross-build | PASS at `31a5aadd` |
 | Application/GNSS RAM boundaries | linker-map verifier and JSON report | PASS |
 | Built-in GNSS/PWM/eMMC exclusion | Kconfig, symbol and artifact guards | PASS |
-| Rover boot and ground-rover heartbeat | 2026-08-04 combined-board runtime gate | PASS |
-| GNSS/PWBIMU live in Rover | sample consumed plus changing RAW_IMU | PASS; GNSS fix/accuracy HOLD |
-| Normal/forced arm denial | both returned `MAV_RESULT_FAILED` | PASS |
-| MANUAL_CONTROL to CH1/CH3 override | CH1=1800, CH3=1700 dry-run | PASS for input path only |
-| Physical write count | reject-only implementation and no backend | software guard PASS; electrical HOLD |
+| Shadow output/readback | host tests, static guard and linked firmware | PASS in RAM only; electrical HOLD |
+| Original Rover sensor/command gate | `a200430c`: GNSS/PWBIMU, ARM denial and CH1/CH3 dry-run | PASS; GNSS fix/accuracy HOLD |
+| Latest Rover boot identity and heartbeat | `31a5aadd`: matching runtime and `MAV_TYPE_GROUND_ROVER` | PASS |
+| Latest sensor runtime after warm reset | PWBIMU opened, then stream failed; GNSS sample absent | HOLD; do not regress original PASS claim |
+| Latest hardware GCS mission round-trip | timed out waiting for `MISSION_COUNT`; no mission modified | HOLD pending cold boot |
+| Tested-code SITL autonomous sequence | `b455243f80`: upload, ARM, AUTO, waypoints, completion, DISARM | PASS in simulation only |
+| Normal/forced arm denial | original hardware run and fail-closed implementation | PASS; arming remains impossible |
+| MANUAL_CONTROL to CH1/CH3 override | CH1=1800, CH3=1700 dry-run on original hardware run | PASS for input path only |
+| Physical write count | reject-only shadow implementation and no backend | software guard PASS; electrical HOLD |
 | Steering servo direction/range/neutral | no servo signal connected | HOLD |
 | ESC neutral/brake/reverse/failsafe | no ESC signal connected | HOLD |
 | Wheel geometry and control tuning | no moving vehicle test | HOLD |
 | GNSS fix/accuracy and timing margins | runtime fix type 1; not measured | HOLD |
-| Driving safety or autonomy | out of scope | HOLD |
+| Autonomous mission logic | full standard Rover mission in SITL | PASS in simulation only |
+| Hardware autonomous driving | no enabled actuator or moving vehicle test | HOLD |
 
 Passing the output-disabled gate means ArduRover can boot and process a normal
 front-steering command path on Spresense without being able to actuate the car.
