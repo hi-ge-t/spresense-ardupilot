@@ -519,9 +519,7 @@ void *pwbimu_reader_thread(void *)
             // data. This is sensor-only and does not touch any actuator path.
             const bool restarted =
                 checked_ioctl(pwbimu_fd, SNIOC_ENABLE, 0U) == 0 &&
-                checked_ioctl(pwbimu_fd, SNIOC_ENABLE, 1U) == 0 &&
-                board_gpio_int(PIN_EMMC_DATA3, false) == 0 &&
-                board_gpio_int(PIN_EMMC_DATA3, true) == 0;
+                checked_ioctl(pwbimu_fd, SNIOC_ENABLE, 1U) == 0;
             restart_attempts++;
             gnss_marker(restarted
                 ? "SPRESENSE_M1_PWBIMU=RESTART_OK\n"
@@ -532,6 +530,12 @@ void *pwbimu_reader_thread(void *)
                     __ATOMIC_RELEASE);
                 return nullptr;
             }
+            // Re-arm the driver's DRDY edge after the successful stream
+            // restart. The Sony helper may report that the already-enabled
+            // edge was unchanged, so the stream ioctls remain the recovery
+            // success criterion.
+            (void)board_gpio_int(PIN_EMMC_DATA3, false);
+            (void)board_gpio_int(PIN_EMMC_DATA3, true);
             continue;
         }
         if (poll_result < 0) {
