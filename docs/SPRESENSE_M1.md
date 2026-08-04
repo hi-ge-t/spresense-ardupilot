@@ -238,6 +238,33 @@ does not validate physical outputs, IMU axis orientation, update-rate timing,
 GNSS accuracy, control stability or flight behavior; the runtime JSON keeps
 those claims false.
 
+For a non-flight persistence and endurance check, first run the guarded
+60-second parameter test. The only permitted write is `GCS_PID_MASK`; the
+checker restores its original value and verifies that restoration after a
+second DTR reset:
+
+```sh
+python3 Tools/spresense/m1_copter_bench_check.py \
+  --port /dev/cu.usbserial-210 \
+  --ack-param-write GCS_PID_MASK \
+  --duration-seconds 60 \
+  --output build/spresense-m1-copter-link-artifacts/bench-smoke-evidence.json
+```
+
+Then run the read-only 30-minute monitor:
+
+```sh
+python3 Tools/spresense/m1_copter_bench_check.py \
+  --port /dev/cu.usbserial-210 \
+  --duration-seconds 1800 \
+  --output build/spresense-m1-copter-link-artifacts/bench-endurance-evidence.json
+```
+
+The monitor requires continuous heartbeat, advancing nonzero RAW_IMU samples,
+GPS messages and a never-armed vehicle. It observes EKF, attitude, memory,
+load and vibration messages but does not convert their presence into timing,
+accuracy, orientation or flight claims.
+
 The first hardware run was completed on 2026-08-01. The committed evidence
 summary is `docs/evidence/SPRESENSE_M1_GCS_20260801.md`; that run used the
 GNSS-only profile with the Multi-IMU removed. The combined profile's
@@ -249,7 +276,9 @@ and the detailed runtime JSON remain ignored build artifacts. The full-Copter
 link and initial output-disabled runtime record is
 `docs/evidence/SPRESENSE_M1_COPTER_LINK_BUILD_20260803.md`. The current
 AP_HAL GNSS/INS frontend runtime record is
-`docs/evidence/SPRESENSE_M1_AP_HAL_SENSORS_20260804.md`.
+`docs/evidence/SPRESENSE_M1_AP_HAL_SENSORS_20260804.md`. The parameter,
+GNSS-fix and 30-minute non-flight record is
+`docs/evidence/SPRESENSE_M1_NONFLIGHT_BENCH_20260804.md`.
 
 ## Evidence and HOLD items
 
@@ -267,6 +296,11 @@ AP_HAL GNSS/INS frontend runtime record is
 | Copter Application/GNSS RAM boundaries | Confirmed | Application heap envelope 504752 bytes; GNSS heap 655360 bytes; runtime pressure remains unqualified |
 | Copter boot, GCS and ARM rejection | Confirmed, combined-board bench run | ArduPilot heartbeat; normal and forced ARM both `MAV_RESULT_FAILED`; armed=false on 2026-08-04 |
 | ArduPilot GNSS/Multi-IMU HAL integration | Confirmed, narrow combined-board runtime | GNSS SAMPLE/ATTACH/CONSUMED markers, no-fix `GPS_RAW_INT`, and two changing nonzero-acceleration `RAW_IMU` samples at `1446192e7e...` |
+| Parameter storage across reboot | Confirmed, one guarded sequence | `GCS_PID_MASK` 0 -> 1 -> reboot -> 1 -> restore 0 -> reboot -> 0 on explicit microSD storage |
+| 30-minute non-flight runtime | Confirmed, one combined-board run | 1808 heartbeats, maximum gap 1.305 s, 1792 GPS and 8951 RAW_IMU messages, armed=false |
+| GNSS position fix | Confirmed, one unsurveyed bench run | maximum fix type 4 and 24 visible satellites; accuracy, latency and rate remain HOLD |
+| EKF3 initialization | HOLD/not observed | EKF3 is enabled but configured barometer and compass sources have device ID 0; no `EKF_STATUS_REPORT` or `AHRS2` observed |
+| Multi-IMU axis orientation | HOLD | stream and timestamps remained live for 30 minutes, but labelled physical X/Y/Z poses were not captured |
 | GNSS Add-on bounded sample | Confirmed, one bench run | `M1PGN001`, `M1_GNSS_OK=1`, `M1_GNSS_ERR=0`; fix, accuracy and latency remain HOLD |
 | Multi-IMU startup sample | Confirmed, one bench run | `M1PGN001`, `M1_IMU_OK=1` on 2026-08-03 |
 | Combined Add-on coexistence | Confirmed, one boot | `M1_GNSS_OK=1` and `M1_IMU_OK=1` from the same boot on 2026-08-03 |
