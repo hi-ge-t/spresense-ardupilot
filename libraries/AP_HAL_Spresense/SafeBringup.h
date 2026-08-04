@@ -10,6 +10,10 @@ static constexpr const char *CONSOLE_DEVICE = "/dev/ttyS0";
 static constexpr const char *TELEMETRY_DEVICE = "/dev/ttyACM0";
 static constexpr const char *HIL_DEVICE = "/dev/ttyS2";
 static constexpr const char *GNSS_DEVICE = "/dev/gps2";
+static constexpr const char *STORAGE_BLOCK_DEVICE = "/dev/mmcsd0";
+static constexpr const char *STORAGE_MOUNT_POINT = "/mnt/sd0";
+static constexpr const char *STORAGE_FILESYSTEM = "vfat";
+static constexpr const char *STORAGE_DIRECTORY = "/mnt/sd0/APM";
 static constexpr const char *STORAGE_PATH = "/mnt/sd0/APM/ardupilot.stg";
 static constexpr size_t STORAGE_SIZE = 16384U;
 

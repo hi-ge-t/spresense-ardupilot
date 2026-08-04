@@ -25,6 +25,7 @@ def main() -> int:
         root / "libraries/AP_HAL_Spresense/UARTDriver.cpp",
         root / "libraries/AP_HAL_Spresense/Storage.cpp",
         root / "libraries/AP_HAL_Spresense/Scheduler.cpp",
+        root / "libraries/AP_HAL_Spresense/Semaphores.cpp",
         root / "libraries/AP_HAL_Spresense/RCOutput.cpp",
     ]
     with tempfile.TemporaryDirectory(prefix="spresense-m1-host-") as temporary_directory:
@@ -44,6 +45,25 @@ def main() -> int:
         ]
         subprocess.run(command, cwd=root, check=True)
         subprocess.run([str(binary)], cwd=root, check=True)
+
+        sensor_binary = temporary_path / "test_sensor_bridge"
+        sensor_command = [
+            compiler,
+            "-std=c++17",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-pedantic",
+            str(root / "libraries/AP_HAL_Spresense/SensorBridge.cpp"),
+            str(
+                root /
+                "libraries/AP_HAL_Spresense/tests/test_sensor_bridge.cpp"
+            ),
+            "-o",
+            str(sensor_binary),
+        ]
+        subprocess.run(sensor_command, cwd=root, check=True)
+        subprocess.run([str(sensor_binary)], cwd=root, check=True)
 
         for adapter_source in adapter_sources:
             adapter_object = temporary_path / f"{adapter_source.stem}.o"
@@ -100,6 +120,45 @@ def main() -> int:
 
     subprocess.run(
         [sys.executable, str(root / "Tools/spresense/verify_m1_contract.py")],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(
+        [sys.executable,
+         str(root / "Tools/spresense/verify_m1_copter_contract.py")],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(
+        [sys.executable,
+         str(root / "Tools/spresense/tests/test_verify_m1_copter_map.py")],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(
+        [sys.executable,
+         str(root / "Tools/spresense/tests/test_m1_copter_serial_check.py")],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(
+        [sys.executable,
+         str(root / "Tools/spresense/tests/test_m1_copter_bench_check.py")],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(
+        [sys.executable,
+         str(root / "Tools/spresense/tests/test_m1_copter_build_guard.py")],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(
+        [sys.executable, "-m", "py_compile",
+         str(root / "Tools/spresense/build_m1_copter_firmware.py"),
+         str(root / "Tools/spresense/m1_copter_bench_check.py"),
+         str(root / "Tools/spresense/m1_copter_serial_check.py"),
+         str(root / "Tools/spresense/verify_m1_copter_map.py")],
         cwd=root,
         check=True,
     )

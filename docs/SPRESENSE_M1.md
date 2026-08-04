@@ -1,4 +1,4 @@
-# Spresense M1 output-disabled GCS bring-up
+# Spresense M1 output-disabled GCS and Copter bring-up
 
 ## Scope and current boundary
 
@@ -6,7 +6,7 @@ This fork starts an experimental Sony Spresense lane from upstream
 `Copter-4.7.0`, commit `1511f27194f1dcc3728270883047bdf022b3fd53`.
 It is not flight firmware.
 
-M1 now contains two separate software slices:
+M1 now contains three separate software slices:
 
 1. `AP_HAL_Spresense` host-verifiable console, UART, monotonic-time, storage,
    scheduler and fail-closed RC-output primitives.
@@ -15,6 +15,30 @@ M1 now contains two separate software slices:
    `spresense-m1-pwbimu-gnss-gcs` profile requires both the CXD5610 GNSS
    Add-on and CXD5602PWBIMU Multi-IMU Add-on. The earlier
    `spresense-m1-gcs` GNSS-only profile remains available for regression.
+3. `spresense-m1-copter-link`, which links the real ArduCopter vehicle archive
+   into a Sony SDK/NuttX SPK through `AP_HAL_Spresense`. This profile adds a
+   NuttX pthread scheduler and semaphore implementation, but keeps a
+   reject-only RCOutput, a hard rejection at the Copter arming entry point and
+   no PWM, DShot or CAN backend.
+
+The third slice now also contains dedicated, board-local sensor integration.
+`AP_GPS_Spresense` reads CXD5610 samples through `/dev/gps2`, while
+`AP_InertialSensor_Spresense` reads the CXD5602PWBIMU through `/dev/imu0` at a
+bring-up-only 60 Hz. This matches the hardware-verified bounded Sony probe;
+flight-rate timing remains HOLD. `SensorBridge` keeps Sony/NuttX types out of the Waf vehicle
+archive ABI and converts GNSS position/velocity/DOP and IMU gyro/acceleration
+into ArduPilot frontend units. Its host side is a fail-closed stub; the Sony
+application must provide the real bridge at final link. The general I2C and
+SPI managers remain empty because these two Sony character drivers do not use
+ArduPilot's generic device-manager path.
+
+The IMU transform is explicitly `ROTATION_NONE`; assembled-airframe axis
+orientation has not been physically verified. Host conversion tests and a
+Sony SDK cross-build close the software integration gate. One output-disabled
+combined-board run also confirmed that a CXD5610 sample reaches AP_GPS and
+changing CXD5602PWBIMU accelerometer samples reach AP_InertialSensor. This does
+not close loop timing, physical orientation, GNSS fix/accuracy or flight
+readiness; those remain HOLD.
 
 The diagnostic uses the ArduPilot-pinned `ardupilotmega` MAVLink v2 definition
 and identifies as `MAV_AUTOPILOT_ARDUPILOTMEGA`/quadrotor. It sends a 1 Hz
@@ -36,7 +60,10 @@ modes.
 
 ## Fixed safety and platform contract
 
-- Every ARM request is answered with `MAV_RESULT_DENIED`.
+- The diagnostic answers every ARM request with `MAV_RESULT_DENIED`. The full
+  Copter profile rejects both normal and forced arming in
+  `AP_Arming_Copter::arm`; the generic Copter MAVLink handler reports that
+  rejection as `MAV_RESULT_FAILED`. Neither path may advertise armed state.
 - No actuator, PWM, DShot or CAN output backend is linked. Sony/NuttX PWM is
   disabled in the target configuration.
 - The built-in GNSS is disabled. The CXD5610 GNSS Add-on at `/dev/gps2` and
@@ -44,8 +71,16 @@ modes.
   synthetic GNSS fallback and must complete one bounded Add-on sample probe.
 - In the combined profile, Sony's CXD5602PWBIMU driver, SPI5 DMAC and
   `/dev/imu0` are mandatory. There is no synthetic sensor or runtime fallback.
-- The main-board CP2102N UART is `/dev/ttyS0` at 115200 baud. NSH, CDC-ACM and
-  USB mass storage commands are disabled so text cannot corrupt MAVLink.
+- The Copter profile defaults GPS1 to the dedicated CXD5610 backend and INS to
+  the dedicated CXD5602PWBIMU backend. Failure to open either required device
+  does not select HIL, simulated, serial or another automatic fallback.
+- A stalled PWBIMU stream may be stopped and started at most three times, with
+  the data-ready interrupt re-armed after each attempt. Exhaustion fails the
+  sensor stream closed; it does not select another sensor or enable an output.
+- The dedicated profile selects UART1 as the NuttX console so the main-board
+  CP2102N UART is `/dev/ttyS0` at 115200 baud. NSH, CDC-ACM and USB mass
+  storage commands are disabled. Startup text can precede MAVLink; the runtime
+  checker waits for and resynchronizes on the first valid heartbeat.
 - Development storage remains microSD and the final candidate remains eMMC.
   No automatic storage fallback is introduced by this slice.
 - The standard Multi-IMU driver uses SPI5 on pins shared with eMMC, and this
@@ -54,7 +89,10 @@ modes.
 - Generated firmware artifacts stay under ignored `build/`; binaries are not
   committed or distributed from this stage.
 
-The machine-readable contract is `spresense-m1-manifest.json`.
+The diagnostic contract is `spresense-m1-manifest.json`. The separate full
+Copter link contract is `spresense-m1-copter-manifest.json`; the split keeps
+the historical diagnostic hardware evidence from being re-labelled as Copter
+runtime evidence.
 
 ## Reproducible host and Sony SDK verification
 
@@ -103,6 +141,40 @@ python3 Tools/spresense/build_m1_gcs_firmware.py \
   --profile spresense-m1-gcs
 ```
 
+### Full Copter link profile
+
+From a clean tree, build the output-disabled Copter SPK with:
+
+```sh
+python3 Tools/spresense/build_m1_copter_firmware.py
+```
+
+The script first builds the real Copter archive with the pinned ArduPilot
+source, then links it with the Sony SDK application. It creates
+`build/spresense-m1-copter-link-artifacts/` and fails unless all of these
+conditions hold:
+
+- the Sony SDK commit and Sony ARM GCC 10.3.1 match the pinned inputs;
+- `arducopter_spresense_main` is the only strong entry symbol and the complete
+  Copter arming path is present;
+- NuttX pthread scheduler, recursive priority-inheritance semaphore and both
+  Add-on driver symbols are present;
+- built-in GNSS, eMMC, PWM and NuttX PWM remain disabled;
+- UART1 is the selected console so `/dev/ttyS0` remains the main-board GCS
+  transport;
+- reject-only RCOutput and the compile-time Copter arming guard remain in the
+  source contract;
+- Application SRAM code/rodata/data/bss/heap stay inside the 1536 KiB region;
+- GNSS RAM code/rodata/data/bss are empty for this profile and the complete
+  640 KiB region is available as the GNSS heap;
+- the artifact manifest records `AP_GPS_Spresense`,
+  `AP_InertialSensor_Spresense` and `GNSS+INS`; as a build artifact it records
+  sensor runtime as a hardware gate, output disabled, ARM always rejected,
+  expected physical writes zero and flight-ready false.
+
+`--reuse-build --allow-dirty` is only an iteration aid. It produces a
+`project_tree=dirty` manifest which cannot pass the flash guard.
+
 ## Hardware and GCS procedure
 
 Close QGroundControl and every serial terminal before preflight. On macOS use
@@ -138,6 +210,61 @@ means that a bounded Add-on notification was read; it does not mean that a fix
 was obtained. QGroundControl is opened separately after this gate to confirm
 that an installed GCS discovers the same vehicle.
 
+The Copter-link hardware gate is deliberately separate. It may only use a
+clean artifact after host, map, symbol and flash preflight guards pass:
+
+```sh
+SPFC_PROFILE=spresense-m1-copter-link \
+  Tools/flash_spresense.sh /dev/cu.usbserial-210 --preflight
+```
+
+After installing the exact preflighted image, verify the real Copter
+heartbeat, `GPS_RAW_INT`, two changing `RAW_IMU` samples, plus both normal and
+force-ARM rejection:
+
+```sh
+python3 Tools/spresense/m1_copter_serial_check.py \
+  --port /dev/cu.usbserial-210 \
+  --reset-dtr \
+  --startup-timeout 150 \
+  --sensor-timeout 120 \
+  --output build/spresense-m1-copter-link-artifacts/runtime-evidence.json
+```
+
+This gate proves only that both Sony device streams reach the ArduPilot
+GPS/INS frontends and that arming stays rejected. A no-fix
+`GPS_RAW_INT` is acceptable because fix and accuracy are different gates. It
+does not validate physical outputs, IMU axis orientation, update-rate timing,
+GNSS accuracy, control stability or flight behavior; the runtime JSON keeps
+those claims false.
+
+For a non-flight persistence and endurance check, first run the guarded
+60-second parameter test. The only permitted write is `GCS_PID_MASK`; the
+checker restores its original value and verifies that restoration after a
+second DTR reset:
+
+```sh
+python3 Tools/spresense/m1_copter_bench_check.py \
+  --port /dev/cu.usbserial-210 \
+  --ack-param-write GCS_PID_MASK \
+  --duration-seconds 60 \
+  --output build/spresense-m1-copter-link-artifacts/bench-smoke-evidence.json
+```
+
+Then run the read-only 30-minute monitor:
+
+```sh
+python3 Tools/spresense/m1_copter_bench_check.py \
+  --port /dev/cu.usbserial-210 \
+  --duration-seconds 1800 \
+  --output build/spresense-m1-copter-link-artifacts/bench-endurance-evidence.json
+```
+
+The monitor requires continuous heartbeat, advancing nonzero RAW_IMU samples,
+GPS messages and a never-armed vehicle. It observes EKF, attitude, memory,
+load and vibration messages but does not convert their presence into timing,
+accuracy, orientation or flight claims.
+
 The first hardware run was completed on 2026-08-01. The committed evidence
 summary is `docs/evidence/SPRESENSE_M1_GCS_20260801.md`; that run used the
 GNSS-only profile with the Multi-IMU removed. The combined profile's
@@ -145,7 +272,13 @@ software-only build record is
 `docs/evidence/SPRESENSE_M1_PWBIMU_GNSS_BUILD_20260803.md`. A single combined
 GNSS + Multi-IMU bench run was completed on 2026-08-03 and is recorded in
 `docs/evidence/SPRESENSE_M1_COMBINED_RUNTIME_20260803.md`. Generated firmware
-and the detailed runtime JSON remain ignored build artifacts.
+and the detailed runtime JSON remain ignored build artifacts. The full-Copter
+link and initial output-disabled runtime record is
+`docs/evidence/SPRESENSE_M1_COPTER_LINK_BUILD_20260803.md`. The current
+AP_HAL GNSS/INS frontend runtime record is
+`docs/evidence/SPRESENSE_M1_AP_HAL_SENSORS_20260804.md`. The parameter,
+GNSS-fix and 30-minute non-flight record is
+`docs/evidence/SPRESENSE_M1_NONFLIGHT_BENCH_20260804.md`.
 
 ## Evidence and HOLD items
 
@@ -159,7 +292,15 @@ and the detailed runtime JSON remain ignored build artifacts.
 | Application/GNSS RAM linker boundaries | Confirmed | `memory-layout.json`; runtime timing remains unqualified |
 | Spresense boot and bidirectional serial GCS | Confirmed, one bench run | `M1GCS001`, four parameters and ARM `DENIED` on 2026-08-01 |
 | QGroundControl discovery | Confirmed, one bench run | QGroundControl 5.0.8 displayed ArduPilot / Not Ready |
-| Full Sony NuttX Copter link | HOLD | future M1 slice; this image is not Copter |
+| Full Sony NuttX Copter link/SPK | Confirmed | clean artifact `1446192e7e...`; real Copter archive, unique entry, pthread scheduler and Sony link pass |
+| Copter Application/GNSS RAM boundaries | Confirmed | Application heap envelope 504752 bytes; GNSS heap 655360 bytes; runtime pressure remains unqualified |
+| Copter boot, GCS and ARM rejection | Confirmed, combined-board bench run | ArduPilot heartbeat; normal and forced ARM both `MAV_RESULT_FAILED`; armed=false on 2026-08-04 |
+| ArduPilot GNSS/Multi-IMU HAL integration | Confirmed, narrow combined-board runtime | GNSS SAMPLE/ATTACH/CONSUMED markers, no-fix `GPS_RAW_INT`, and two changing nonzero-acceleration `RAW_IMU` samples at `1446192e7e...` |
+| Parameter storage across reboot | Confirmed, one guarded sequence | `GCS_PID_MASK` 0 -> 1 -> reboot -> 1 -> restore 0 -> reboot -> 0 on explicit microSD storage |
+| 30-minute non-flight runtime | Confirmed, one combined-board run | 1808 heartbeats, maximum gap 1.305 s, 1792 GPS and 8951 RAW_IMU messages, armed=false |
+| GNSS position fix | Confirmed, one unsurveyed bench run | maximum fix type 4 and 24 visible satellites; accuracy, latency and rate remain HOLD |
+| EKF3 initialization | HOLD/not observed | EKF3 is enabled but configured barometer and compass sources have device ID 0; no `EKF_STATUS_REPORT` or `AHRS2` observed |
+| Multi-IMU axis orientation | HOLD | stream and timestamps remained live for 30 minutes, but labelled physical X/Y/Z poses were not captured |
 | GNSS Add-on bounded sample | Confirmed, one bench run | `M1PGN001`, `M1_GNSS_OK=1`, `M1_GNSS_ERR=0`; fix, accuracy and latency remain HOLD |
 | Multi-IMU startup sample | Confirmed, one bench run | `M1PGN001`, `M1_IMU_OK=1` on 2026-08-03 |
 | Combined Add-on coexistence | Confirmed, one boot | `M1_GNSS_OK=1` and `M1_IMU_OK=1` from the same boot on 2026-08-03 |

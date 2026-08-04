@@ -1131,6 +1131,49 @@ class esp32s3(esp32):
             cfg.env.HWDEF = self.hwdef
         super(esp32s3, self).configure_env(cfg, env)
 
+class spresense(Board):
+    toolchain = 'arm-none-eabi'
+
+    def configure_env(self, cfg, env):
+        super(spresense, self).configure_env(cfg, env)
+
+        env.BOARD_CLASS = "SPRESENSE"
+        env.DEFINES.update(
+            CONFIG_HAL_BOARD = 'HAL_BOARD_SPRESENSE',
+            CONFIG_HAL_BOARD_SUBTYPE = 'HAL_BOARD_SUBTYPE_NONE',
+            AP_SIM_ENABLED = 0,
+            AP_MAIN = 'arducopter_spresense_main',
+            HAL_WITH_DSP = 0,
+        )
+
+        env.AP_LIBRARIES += [
+            # The vehicle archive is built with the bare-metal toolchain
+            # headers.  NuttX-facing HAL sources are compiled by the Sony SDK
+            # application and linked with this archive.
+            'AP_HAL_Empty',
+        ]
+
+        cpu_flags = [
+            '-mcpu=cortex-m4',
+            '-mthumb',
+            '-mfpu=fpv4-sp-d16',
+            '-mfloat-abi=hard',
+            '-mabi=aapcs',
+        ]
+        env.CFLAGS += cpu_flags + [
+            '-Os',
+        ]
+        env.CXXFLAGS += cpu_flags + [
+            '-Os',
+            '-fno-rtti',
+            '-fno-threadsafe-statics',
+        ]
+
+        env.AP_PROGRAM_AS_STLIB = True
+
+    def get_name(self):
+        return 'spresense'
+
 class chibios(Board):
     abstract = True
     toolchain = 'arm-none-eabi'
