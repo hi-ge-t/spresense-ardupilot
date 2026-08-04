@@ -12,15 +12,15 @@ remained absent from the linked backend. This is not flight evidence.
 ## Reproducible inputs and artifact identity
 
 - upstream Copter baseline: `1511f27194f1dcc3728270883047bdf022b3fd53`
-- project commit: `b8898f187d1cd7f691e7803f5c701e4b4933bc3a`
+- project commit: `1446192e7e6486307d86378614b2befba944cee8`
 - Sony SDK commit: `7fd61b2c03f06a4ff0302b84c755e58c338788b2`
 - MAVLink commit: `288b907c384a892c8519bfe271682424b1e1a3a0`
 - compiler: Sony ARM GCC 10.3.1
 - profile: `spresense-m1-copter-link`
 - clean `nuttx.spk` SHA-256:
-  `f3cedc392be5136b924659bd996ad80875afbb46da2b9f3ec1fde9c977f4ca99`
+  `981c1269ea1bacccc5dae22b4843109255340c47992347e8dec377c540bd0e07`
 
-The runtime checker read `b8898f18` from the booted ArduCopter identity and
+The runtime checker read `1446192e` from the booted ArduCopter identity and
 required it to be a prefix of the manifest project commit. Its independently
 calculated SPK hash matched the manifest value above. Generated binaries and
 the detailed `runtime-evidence.json` remain ignored build artifacts.
@@ -45,7 +45,7 @@ complete 640 KiB region was available as its required heap.
 ## Hardware runtime result
 
 The guarded DTR MainCore install targeted `/dev/cu.usbserial-210`. The runtime
-capture completed at `2026-08-04T02:06:18.281928+00:00` and passed these
+capture completed at `2026-08-04T02:20:27.801810+00:00` and passed these
 machine checks:
 
 - ArduPilotMega quadrotor heartbeat and the HAL-loop marker were received.
@@ -54,8 +54,8 @@ machine checks:
 - `GPS_RAW_INT` reported fix type 1 and zero visible satellites. This is
   explicitly a no-fix result and does not verify position or accuracy.
 - `SPRESENSE_M1_PWBIMU=SAMPLE` was received and two different RAW_IMU samples
-  were captured. Their axes were `(1332, -1106, -9574, 0, 0, 0)` and
-  `(1337, -1110, -9615, 0, 0, 0)` at 11594165 and 11793979 microseconds.
+  were captured. Their axes were `(1308, -1108, -9589, 0, 0, 0)` and
+  `(1310, -1111, -9619, 0, 0, 0)` at 11597034 and 11796817 microseconds.
   This confirms a changing nonzero acceleration stream only. The zero gyro
   values in this stationary capture are not a gyro-performance claim.
 - A PWBIMU stream timeout triggered the bounded restart path; recovery was

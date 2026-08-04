@@ -263,10 +263,10 @@ AP_HAL GNSS/INS frontend runtime record is
 | Application/GNSS RAM linker boundaries | Confirmed | `memory-layout.json`; runtime timing remains unqualified |
 | Spresense boot and bidirectional serial GCS | Confirmed, one bench run | `M1GCS001`, four parameters and ARM `DENIED` on 2026-08-01 |
 | QGroundControl discovery | Confirmed, one bench run | QGroundControl 5.0.8 displayed ArduPilot / Not Ready |
-| Full Sony NuttX Copter link/SPK | Confirmed | clean artifact `b8898f187d...`; real Copter archive, unique entry, pthread scheduler and Sony link pass |
+| Full Sony NuttX Copter link/SPK | Confirmed | clean artifact `1446192e7e...`; real Copter archive, unique entry, pthread scheduler and Sony link pass |
 | Copter Application/GNSS RAM boundaries | Confirmed | Application heap envelope 504752 bytes; GNSS heap 655360 bytes; runtime pressure remains unqualified |
 | Copter boot, GCS and ARM rejection | Confirmed, combined-board bench run | ArduPilot heartbeat; normal and forced ARM both `MAV_RESULT_FAILED`; armed=false on 2026-08-04 |
-| ArduPilot GNSS/Multi-IMU HAL integration | Confirmed, narrow combined-board runtime | GNSS SAMPLE/ATTACH/CONSUMED markers, no-fix `GPS_RAW_INT`, and two changing nonzero-acceleration `RAW_IMU` samples at `b8898f187d...` |
+| ArduPilot GNSS/Multi-IMU HAL integration | Confirmed, narrow combined-board runtime | GNSS SAMPLE/ATTACH/CONSUMED markers, no-fix `GPS_RAW_INT`, and two changing nonzero-acceleration `RAW_IMU` samples at `1446192e7e...` |
 | GNSS Add-on bounded sample | Confirmed, one bench run | `M1PGN001`, `M1_GNSS_OK=1`, `M1_GNSS_ERR=0`; fix, accuracy and latency remain HOLD |
 | Multi-IMU startup sample | Confirmed, one bench run | `M1PGN001`, `M1_IMU_OK=1` on 2026-08-03 |
 | Combined Add-on coexistence | Confirmed, one boot | `M1_GNSS_OK=1` and `M1_IMU_OK=1` from the same boot on 2026-08-03 |
