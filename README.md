@@ -14,8 +14,11 @@
 > [Spresense M1 bring-up](docs/SPRESENSE_M1.md).
 >
 > A separate output-disabled ArduRover artifact now links the full Rover 4.7.0
-> archive for a conventional front-steering vehicle: CH1/GroundSteering and
-> CH3/Throttle. A combined Multi-IMU/GNSS Add-on hardware gate confirmed the
+> archive for a Tamiya CC-02 target with a user-specified 250 mm wheelbase and
+> approximately 90 mm tires; 30 degrees per side is the nominal steering
+> setting and the calculated 0.433 m bicycle-model radius remains unmeasured:
+> CH1/GroundSteering and CH3/Throttle for its single-ESC 4WD drivetrain. A
+> combined Multi-IMU/GNSS Add-on hardware gate confirmed the
 > ground-rover heartbeat, live sensor ingestion, CH1/CH3 dry-run mapping and
 > normal/forced arming rejection. Real Rover SITL now passes a disarmed GCS
 > mission upload/download/restore transaction without sending ARM, and the

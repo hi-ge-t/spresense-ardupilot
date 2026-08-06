@@ -4,7 +4,9 @@
 
 This profile links the full ArduRover 4.7.0 vehicle archive to the existing
 output-disabled `AP_HAL_Spresense`. It targets a conventional four-wheel RC
-car with front steering and rear-wheel throttle. It is a software and
+car with front steering and one drivetrain throttle channel. The selected
+vehicle is a Tamiya CC-02 with a user-specified 250 mm wheelbase and a
+shaft-driven 4WD drivetrain. It is a software and
 output-disabled hardware feasibility artifact, not drive-ready firmware. One
 combined-board sensor/command hardware gate passed on the original Rover
 profile. The latest software adds fail-closed shadow output, a reversible GCS
@@ -20,11 +22,49 @@ The selected upstream frame path is the standard ArduRover regular frame:
 | Function | ArduPilot default | Intended later hardware |
 |---|---|---|
 | Front steering | `SERVO1_FUNCTION=26` (`GroundSteering`, CH1) | steering servo |
-| Throttle | `SERVO3_FUNCTION=70` (`Throttle`, CH3) | rear drive ESC |
+| Throttle | `SERVO3_FUNCTION=70` (`Throttle`, CH3) | single 4WD drivetrain ESC |
 
 This is not skid steering, an omni frame or four-wheel steering. No custom
 steering mixer was added. `AP_MotorsUGV::output_regular()` remains the source
 of steering/throttle calculation.
+
+## Target chassis geometry
+
+The vehicle target is fixed as follows:
+
+| Property | Current value | Evidence status |
+|---|---:|---|
+| Chassis | Tamiya CC-02 | selected by the user |
+| Steering layout | front steering | regular-frame design assumption |
+| Drivetrain | shaft-driven 4WD, single ESC | chassis-level design assumption |
+| Wheelbase | 250 mm (`0.250 m`) | user-specified target |
+| Tire diameter | approximately 90 mm (`0.090 m`) | user-specified estimate |
+| Loaded rolling circumference | TODO: unmeasured loaded rolling circumference | HOLD |
+| Top-view steering displacement | 50 mm lock-to-lock | user-specified |
+| Steering displacement reference | tire leading edge | user-specified |
+| Nominal road-wheel steering angle | 30 degrees per side | user-selected setting; not angle-measured |
+| Bicycle-model turn radius | 0.433 m | calculated model value, not a measured turning radius |
+| Actual minimum turning radius | TODO: unmeasured turning radius | HOLD |
+
+The nominal model uses `R = L / tan(delta)` with `L = 0.250 m` and
+`delta = 30 degrees`, giving `R = 0.433 m`. This is a centerline bicycle-model
+estimate. It does not include inner/outer Ackermann angle differences, linkage
+compliance, tire slip or mechanical endpoint error, and is not accepted as an
+actual minimum turning-radius measurement. For the later restrained geometry
+gate, measure the actual road-wheel angles and driven path after the servo horn,
+linkage, endpoints and mechanical stops are installed. Until then, do not
+apply the model radius as a validated control parameter and do not enable
+steering output. The
+250 mm wheelbase and approximate 90 mm tire diameter are configuration inputs
+supplied by the user, not measurements made by this software task. A nominal
+90 mm circle has a calculated circumference of about 282.7 mm, but tire
+deflection, tread and surface slip make that unsuitable as validated odometry
+or speed calibration. Measure loaded rolling circumference separately. The
+reported 50 mm top-view steering displacement is preserved as a lock-to-lock
+raw input measured at the tire leading edge. Together with the nominal 90 mm
+diameter it geometrically suggests about 33.7 degrees per side under a centered
+pivot approximation; 30 degrees per side is intentionally retained as the
+user-selected nominal setting rather than claiming an angular measurement.
 
 ## Safety boundary
 

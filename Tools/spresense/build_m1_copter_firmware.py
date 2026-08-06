@@ -551,6 +551,70 @@ def main(default_vehicle: str = "copter") -> int:
                 "regular-front-steering" if arguments.vehicle == "rover"
                 else "not-applicable"
             ),
+            "m1.rover.chassis": (
+                "tamiya-cc02" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.drivetrain": (
+                "shaft-driven-4wd-single-esc"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.wheelbase_mm": (
+                "250" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.wheelbase_status": (
+                "user-specified-target" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.tire_diameter_mm": (
+                "90" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.tire_diameter_status": (
+                "user-specified-approximate"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.loaded_rolling_circumference_mm": (
+                "hardware-HOLD-unmeasured"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.steering_top_view_displacement_mm": (
+                "50" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.steering_displacement_span": (
+                "lock-to-lock" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.steering_displacement_reference": (
+                "tire-leading-edge"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.steering_displacement_status": (
+                "user-specified"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.steering_angle_deg": (
+                "30" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.steering_angle_status": (
+                "user-selected-nominal-not-measured"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.turn_radius_m": (
+                "0.433" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.turn_radius_model": (
+                "wheelbase-over-tan-steering-angle"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.turn_radius_status": (
+                "calculated-not-measured"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
             "m1.rover.steering_function": (
                 "GroundSteering/CH1" if arguments.vehicle == "rover"
                 else "not-applicable"
