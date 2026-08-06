@@ -349,6 +349,7 @@ def main() -> int:
             "shaft-driven 4WD",
             "evidence/SPRESENSE_M1_ROVER_20260804.md",
             "evidence/SPRESENSE_M1_ROVER_GCS_AUTONOMY_20260804.md",
+            "evidence/SPRESENSE_M1_ROVER_CC02_GEOMETRY_20260806.md",
             "CH1=1800, CH3=1700 dry-run",
             "MISSION_COUNT",
             "28a899ebae",
@@ -380,6 +381,26 @@ def main() -> int:
             "driving_verified=false",
             "not a full power cycle",
             "expected physical write count is zero",
+        ),
+    )
+
+    geometry_evidence = (
+        root / "docs/evidence/SPRESENSE_M1_ROVER_CC02_GEOMETRY_20260806.md"
+    ).read_text(encoding="utf-8")
+    require_tokens(
+        failures,
+        "cc02-geometry-evidence",
+        geometry_evidence,
+        (
+            "373c34be4b812e81571fa4c6b6358de4a8cc49e3",
+            "9414ee977319fed9b238a68c5653ffc89131f7297411c3279d9f5c22b4676249",
+            "m1.rover.wheelbase_mm=250",
+            "m1.rover.tire_diameter_mm=90",
+            "m1.rover.steering_angle_deg=30",
+            "m1.rover.turn_radius_m=0.433",
+            "calculated-not-measured",
+            "hardware-HOLD-unmeasured",
+            "No board power, DTR reset, flash or physical",
         ),
     )
 

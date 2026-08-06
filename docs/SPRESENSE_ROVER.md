@@ -16,6 +16,8 @@ while the latest hardware GCS mission round-trip remains HOLD after a warm-
 reset sensor-stream failure. See the
 [original hardware evidence](evidence/SPRESENSE_M1_ROVER_20260804.md) and the
 [GCS/autonomy evidence](evidence/SPRESENSE_M1_ROVER_GCS_AUTONOMY_20260804.md).
+The selected chassis inputs and their evidence levels are recorded separately
+in the [CC-02 geometry evidence](evidence/SPRESENSE_M1_ROVER_CC02_GEOMETRY_20260806.md).
 
 The selected upstream frame path is the standard ArduRover regular frame:
 
