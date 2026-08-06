@@ -22,6 +22,27 @@ linkage compliance, tire deformation and surface slip. The model value must
 not be represented as a measured minimum turning radius or applied as a
 validated driving parameter.
 
+## Official CC-02 reference
+
+The closest official published configuration to the user inputs is the
+1/10-scale Tamiya Toyota Land Cruiser 40 CC-02M, Item 58715. Its official
+specification records a 252 mm wheelbase, 164 mm front and 167 mm rear tread,
+33/90 mm tires, ladder frame, longitudinal motor and shaft-driven 4WD,
+front/rear 3-bevel differentials, front/rear 4-link rigid suspension, CVA oil
+dampers, a kit-standard 16T pinion with 17.33:1 ratio, RS540-type motor and a
+separately required ESC. The generic chassis page lists selectable ratios from
+11.09:1 to 29.28:1:
+
+- https://www.tamiya.com/japan/products/58715/index.html
+- https://www.tamiya.com/japan/products/product_info_ex.html?genre_item=6502%2Crc_base
+
+These are reference values, not an identification of the installed kit. The
+actual 250 mm user target remains authoritative for the current geometry
+model. Actual front/rear tread, tire width, installed pinion and ratio, motor,
+ESC and differential open/locked state remain hardware HOLD. This prevents a
+body-, wheel- or build-dependent catalog value from being promoted to measured
+vehicle evidence.
+
 ## Machine-readable contract
 
 The source manifest and build generator now carry the CC-02 geometry. The
@@ -29,10 +50,37 @@ clean cross-build artifact recorded:
 
 ```text
 m1.rover.chassis=tamiya-cc02
+m1.rover.chassis_scale=1/10
+m1.rover.frame_construction=ladder-frame
+m1.rover.motor_layout=longitudinal-front-mid
 m1.rover.drivetrain=shaft-driven-4wd-single-esc
+m1.rover.drive_transfer=gearbox-propeller-shafts-front-and-rear
+m1.rover.differential_type=front-and-rear-3-bevel
+m1.rover.differential_configuration=hardware-HOLD-not-inspected
+m1.rover.suspension=front-and-rear-4-link-rigid
+m1.rover.dampers=front-and-rear-CVA-oil
 m1.rover.wheelbase_mm=250
+m1.rover.official_reference_wheelbase_class=CC-02M
+m1.rover.official_reference_wheelbase_mm=252
+m1.rover.wheelbase_reference_delta_mm=-2
+m1.rover.official_reference_front_track_mm=164
+m1.rover.official_reference_rear_track_mm=167
+m1.rover.front_track_mm=hardware-HOLD-unmeasured
+m1.rover.rear_track_mm=hardware-HOLD-unmeasured
 m1.rover.tire_diameter_mm=90
+m1.rover.official_reference_tire_width_mm=33
+m1.rover.tire_width_mm=hardware-HOLD-unmeasured
 m1.rover.loaded_rolling_circumference_mm=hardware-HOLD-unmeasured
+m1.rover.official_reference_kit_standard_pinion_teeth=16
+m1.rover.official_reference_kit_standard_gear_ratio=17.33
+m1.rover.official_supported_gear_ratio_min=11.09
+m1.rover.official_supported_gear_ratio_max=29.28
+m1.rover.installed_pinion_teeth=hardware-HOLD-unverified
+m1.rover.installed_gear_ratio=hardware-HOLD-unverified
+m1.rover.official_reference_kit_motor_class=RS540
+m1.rover.official_reference_esc=separately-required
+m1.rover.installed_motor=hardware-HOLD-unverified
+m1.rover.installed_esc=hardware-HOLD-unverified
 m1.rover.steering_top_view_displacement_mm=50
 m1.rover.steering_displacement_span=lock-to-lock
 m1.rover.steering_displacement_reference=tire-leading-edge
@@ -66,6 +114,9 @@ output operation was performed for this evidence.
 ## Remaining geometry HOLD
 
 - loaded rolling circumference;
+- actual front and rear tread and tire width;
+- installed pinion, final gear ratio, motor and ESC;
+- front/rear differential open or locked configuration;
 - actual inner and outer road-wheel angles at servo endpoints;
 - measured minimum turning radius under load;
 - steering neutral, direction, linkage compliance and mechanical stops;

@@ -37,16 +37,45 @@ The vehicle target is fixed as follows:
 | Property | Current value | Evidence status |
 |---|---:|---|
 | Chassis | Tamiya CC-02 | selected by the user |
+| Scale | 1/10 | Tamiya CC-02 kit specification |
+| Frame | ladder frame | CC-02 chassis specification |
 | Steering layout | front steering | regular-frame design assumption |
 | Drivetrain | shaft-driven 4WD, single ESC | chassis-level design assumption |
+| Motor/driveline layout | longitudinal front-mid motor, gearbox and propeller shafts to both axles | CC-02 chassis specification |
+| Differentials | front/rear 3-bevel | type is from the CC-02 specification; installed open/locked state is unverified |
+| Suspension/dampers | front/rear 4-link rigid axles with CVA oil dampers | CC-02 chassis specification |
 | Wheelbase | 250 mm (`0.250 m`) | user-specified target |
+| Nearest official wheelbase class | CC-02M, 252 mm | official reference; installed configuration is not identified by item number |
+| Official-reference tread | front 164 mm, rear 167 mm | Item 58715 CC-02M/90 mm tire reference; actual tread is unmeasured |
 | Tire diameter | approximately 90 mm (`0.090 m`) | user-specified estimate |
+| Official-reference tire width | 33 mm | Item 58715 reference; actual tire width is unmeasured |
 | Loaded rolling circumference | TODO: unmeasured loaded rolling circumference | HOLD |
+| Official-reference pinion/gear ratio | 16T / 17.33:1 | Item 58715 kit standard; installed gearing is unverified |
+| Official selectable gear-ratio range | 11.09:1 to 29.28:1 | CC-02 chassis capability; installed ratio is unverified |
+| Official-reference motor/ESC | RS540 / ESC separately required | Item 58715 kit specification; installed motor and ESC are unverified |
 | Top-view steering displacement | 50 mm lock-to-lock | user-specified |
 | Steering displacement reference | tire leading edge | user-specified |
 | Nominal road-wheel steering angle | 30 degrees per side | user-selected setting; not angle-measured |
 | Bicycle-model turn radius | 0.433 m | calculated model value, not a measured turning radius |
 | Actual minimum turning radius | TODO: unmeasured turning radius | HOLD |
+
+The official reference is the Tamiya Toyota Land Cruiser 40 CC-02M kit,
+Item 58715, because its official 252 mm wheelbase and 33/90 mm tires are the
+closest published match to the user-specified 250 mm and approximately 90 mm.
+This does not assert that the installed kit is Item 58715. In particular,
+CC-02 wheels and tires vary between kits, so the 164/167 mm tread and 33 mm
+tire width remain reference values until measured on the actual vehicle. The
+2 mm difference between the user target and official CC-02M wheelbase is
+retained explicitly; the software does not silently replace 250 mm with
+252 mm. The official source is
+[Tamiya Item 58715](https://www.tamiya.com/japan/products/58715/index.html),
+while the common ladder-frame, driveline and suspension construction is also
+described on the
+[Tamiya CC-02 chassis page](https://www.tamiya.com/japan/products/product_info_ex.html?genre_item=6502%2Crc_base).
+Body envelope, ground clearance, vehicle mass and payload are not populated:
+they depend on the selected body, wheels, suspension setup and installed
+electronics, and the available chassis specification does not establish the
+actual vehicle values.
 
 The nominal model uses `R = L / tan(delta)` with `L = 0.250 m` and
 `delta = 30 degrees`, giving `R = 0.433 m`. This is a centerline bicycle-model

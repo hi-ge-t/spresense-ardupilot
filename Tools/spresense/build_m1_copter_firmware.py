@@ -555,8 +555,40 @@ def main(default_vehicle: str = "copter") -> int:
                 "tamiya-cc02" if arguments.vehicle == "rover"
                 else "not-applicable"
             ),
+            "m1.rover.chassis_scale": (
+                "1/10" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.frame_construction": (
+                "ladder-frame" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.motor_layout": (
+                "longitudinal-front-mid" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
             "m1.rover.drivetrain": (
                 "shaft-driven-4wd-single-esc"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.drive_transfer": (
+                "gearbox-propeller-shafts-front-and-rear"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.differential_type": (
+                "front-and-rear-3-bevel"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.differential_configuration": (
+                "hardware-HOLD-not-inspected"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.suspension": (
+                "front-and-rear-4-link-rigid"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.dampers": (
+                "front-and-rear-CVA-oil"
                 if arguments.vehicle == "rover" else "not-applicable"
             ),
             "m1.rover.wheelbase_mm": (
@@ -567,6 +599,46 @@ def main(default_vehicle: str = "copter") -> int:
                 "user-specified-target" if arguments.vehicle == "rover"
                 else "not-applicable"
             ),
+            "m1.rover.official_reference_model": (
+                "tamiya-land-cruiser-40-cc02m-item-58715"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.official_reference_status": (
+                "official-cc02m-90mm-kit-reference-not-installed-configuration"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.official_reference_wheelbase_class": (
+                "CC-02M" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.official_reference_wheelbase_mm": (
+                "252" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.wheelbase_reference_delta_mm": (
+                "-2" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.official_reference_front_track_mm": (
+                "164" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.official_reference_rear_track_mm": (
+                "167" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.front_track_mm": (
+                "hardware-HOLD-unmeasured"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.rear_track_mm": (
+                "hardware-HOLD-unmeasured"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.track_status": (
+                "hardware-HOLD-unmeasured-official-reference-available"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
             "m1.rover.tire_diameter_mm": (
                 "90" if arguments.vehicle == "rover"
                 else "not-applicable"
@@ -575,8 +647,64 @@ def main(default_vehicle: str = "copter") -> int:
                 "user-specified-approximate"
                 if arguments.vehicle == "rover" else "not-applicable"
             ),
+            "m1.rover.official_reference_tire_width_mm": (
+                "33" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.tire_width_mm": (
+                "hardware-HOLD-unmeasured"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.tire_width_status": (
+                "hardware-HOLD-unmeasured-official-reference-available"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
             "m1.rover.loaded_rolling_circumference_mm": (
                 "hardware-HOLD-unmeasured"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.official_reference_kit_standard_pinion_teeth": (
+                "16" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.official_reference_kit_standard_gear_ratio": (
+                "17.33" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.official_supported_gear_ratio_min": (
+                "11.09" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.official_supported_gear_ratio_max": (
+                "29.28" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.installed_pinion_teeth": (
+                "hardware-HOLD-unverified"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.installed_gear_ratio": (
+                "hardware-HOLD-unverified"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.gear_ratio_status": (
+                "hardware-HOLD-installed-configuration-unverified"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.official_reference_kit_motor_class": (
+                "RS540" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.official_reference_esc": (
+                "separately-required" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.installed_motor": (
+                "hardware-HOLD-unverified"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.installed_esc": (
+                "hardware-HOLD-unverified"
                 if arguments.vehicle == "rover" else "not-applicable"
             ),
             "m1.rover.steering_top_view_displacement_mm": (
