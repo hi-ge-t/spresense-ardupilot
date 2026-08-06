@@ -12,6 +12,23 @@
 > accuracy, control and flight remain unverified. It is not flight-ready
 > firmware. See
 > [Spresense M1 bring-up](docs/SPRESENSE_M1.md).
+>
+> A separate output-disabled ArduRover artifact now links the full Rover 4.7.0
+> archive for a Tamiya CC-02M target using the adopted nominal 252 mm
+> wheelbase, 164/167 mm tread and 33/90 mm tires. A user-specified 13.5T
+> brushless motor is installed; 30 degrees per side is the nominal steering
+> setting and the calculated 0.436 m bicycle-model radius remains unmeasured.
+> CH1/GroundSteering and CH3/Throttle for its single-ESC 4WD drivetrain. A
+> combined Multi-IMU/GNSS Add-on hardware gate confirmed the
+> ground-rover heartbeat, live sensor ingestion, CH1/CH3 dry-run mapping and
+> normal/forced arming rejection. Real Rover SITL now passes a disarmed GCS
+> mission upload/download/restore transaction without sending ARM, and the
+> standard DriveMission test completes its ARM/AUTO/waypoint/disarm sequence.
+> The latest hardware GCS
+> mission round-trip remains HOLD after a warm-reset stream failure, with no
+> mission modified. It has no physical PWM/CAN backend; GNSS fix,
+> steering/ESC signals, driving and control performance remain HOLD. See
+> [Spresense regular-front-steering Rover](docs/SPRESENSE_ROVER.md).
 
 [![Discord](https://img.shields.io/discord/674039678562861068.svg)](https://ardupilot.org/discord)
 

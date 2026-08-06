@@ -68,18 +68,35 @@ private:
 
 class OutputGuard {
 public:
+    static constexpr uint8_t SHADOW_CHANNEL_COUNT = 16U;
+
     bool request_arm();
     bool request_write(uint8_t channel, uint16_t period_us);
+    void begin_shadow_frame();
+    void commit_shadow_frame();
 
     bool armed() const;
     bool physical_output_enabled() const;
     uint32_t arm_reject_count() const;
     uint32_t write_reject_count() const;
     uint32_t physical_write_count() const;
+    uint32_t shadow_write_count() const;
+    uint32_t shadow_frame_count() const;
+    uint32_t unsupported_shadow_write_count() const;
+    bool shadow_sample_seen(uint8_t channel) const;
+    uint16_t shadow_period_us(uint8_t channel) const;
 
 private:
     uint32_t _arm_reject_count = 0;
     uint32_t _write_reject_count = 0;
+    uint32_t _shadow_write_count = 0;
+    uint32_t _shadow_frame_count = 0;
+    uint32_t _unsupported_shadow_write_count = 0;
+    bool _shadow_corked = false;
+    bool _shadow_seen[SHADOW_CHANNEL_COUNT] {};
+    bool _pending_shadow_seen[SHADOW_CHANNEL_COUNT] {};
+    uint16_t _shadow_period_us[SHADOW_CHANNEL_COUNT] {};
+    uint16_t _pending_shadow_period_us[SHADOW_CHANNEL_COUNT] {};
 };
 
 } // namespace Spresense

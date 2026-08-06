@@ -1,0 +1,3 @@
+ifneq ($(CONFIG_SPRESENSE_M1_ROVER_LINK),)
+CONFIGURED_APPS += rover_app
+endif

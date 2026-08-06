@@ -83,10 +83,28 @@ void test_output_guard()
     Spresense::OutputGuard guard;
     expect(!guard.request_arm(), "arming request is rejected");
     expect(!guard.request_write(0U, 1500U), "actuator write is rejected");
+    expect(guard.shadow_sample_seen(0U), "direct shadow sample is recorded");
+    expect(guard.shadow_period_us(0U) == 1500U, "direct shadow value is visible");
+    guard.begin_shadow_frame();
+    expect(!guard.request_write(0U, 1600U), "staged steering write is rejected");
+    expect(!guard.request_write(2U, 1700U), "staged throttle write is rejected");
+    expect(guard.shadow_period_us(0U) == 1500U,
+           "staged shadow value is hidden before commit");
+    expect(!guard.shadow_sample_seen(2U), "staged new channel is hidden before commit");
+    guard.commit_shadow_frame();
+    expect(guard.shadow_period_us(0U) == 1600U, "committed steering shadow is visible");
+    expect(guard.shadow_period_us(2U) == 1700U, "committed throttle shadow is visible");
+    expect(!guard.request_write(16U, 1800U), "out-of-range channel write is rejected");
+    expect(!guard.shadow_sample_seen(16U), "out-of-range channel has no shadow sample");
+    expect(guard.shadow_period_us(16U) == 0U, "out-of-range shadow reads zero");
     expect(!guard.armed(), "arming state remains false");
     expect(!guard.physical_output_enabled(), "physical output remains disabled");
     expect(guard.arm_reject_count() == 1U, "arming rejection is counted");
-    expect(guard.write_reject_count() == 1U, "write rejection is counted");
+    expect(guard.write_reject_count() == 4U, "write rejections are counted");
+    expect(guard.shadow_write_count() == 3U, "supported shadow writes are counted");
+    expect(guard.shadow_frame_count() == 2U, "direct and committed frames are counted");
+    expect(guard.unsupported_shadow_write_count() == 1U,
+           "unsupported shadow writes are counted");
     expect(guard.physical_write_count() == 0U, "physical write count remains zero");
 }
 

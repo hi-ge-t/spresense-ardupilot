@@ -2,7 +2,7 @@
 
 # AP_FLAKE8_CLEAN
 
-"""Build and verify the output-disabled Spresense M1 Copter image."""
+"""Build and verify an output-disabled Spresense M1 vehicle image."""
 
 import argparse
 import hashlib
@@ -83,6 +83,43 @@ FORBIDDEN_SYMBOLS = {
     "cxd56_emmc_initialize",
 }
 
+VEHICLES = {
+    "copter": {
+        "profile": PROFILE,
+        "artifact_directory": ARTIFACT_DIRECTORY,
+        "config": CONFIG,
+        "app_directory": "copter_app",
+        "entry": "arducopter_spresense_main",
+        "firmware_name": "ArduCopter",
+        "tag": "Copter-4.7.0",
+        "archive": "build/spresense/lib/bin/libarducopter.a",
+        "libraries": "build/spresense/lib/libArduCopter_libs.a",
+        "sdk_build": "build/spresense-m1-copter-link-sdk",
+        "waf_vehicle": "copter",
+        "waf_target": "bin/arducopter",
+        "contract": "verify_m1_copter_contract.py",
+        "link_config": "CONFIG_SPRESENSE_M1_COPTER_LINK=y",
+        "arming_symbol": "_ZN16AP_Arming_Copter3armEN9AP_Arming6MethodEb",
+    },
+    "rover": {
+        "profile": "spresense-m1-rover-link",
+        "artifact_directory": "build/spresense-m1-rover-link-artifacts",
+        "config": "rover_app/output_disabled",
+        "app_directory": "rover_app",
+        "entry": "ardurover_spresense_main",
+        "firmware_name": "ArduRover",
+        "tag": "Rover-4.7.0",
+        "archive": "build/spresense/lib/bin/libardurover.a",
+        "libraries": "build/spresense/lib/libRover_libs.a",
+        "sdk_build": "build/spresense-m1-rover-link-sdk",
+        "waf_vehicle": "rover",
+        "waf_target": "bin/ardurover",
+        "contract": "verify_m1_rover_contract.py",
+        "link_config": "CONFIG_SPRESENSE_M1_ROVER_LINK=y",
+        "arming_symbol": "_ZN15AP_Arming_Rover3armEN9AP_Arming6MethodEb",
+    },
+}
+
 
 def run(command, *, cwd: Path, env: dict[str, str], capture=False):
     return subprocess.run(
@@ -112,9 +149,11 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def verify_embedded_commit(path: Path, project_commit: str) -> None:
+def verify_embedded_commit(
+    path: Path, project_commit: str, firmware_name: str = "ArduCopter"
+) -> None:
     short_commit = project_commit[:8]
-    marker = f"ArduCopter V4.7.0 ({short_commit})".encode("ascii")
+    marker = f"{firmware_name} V4.7.0 ({short_commit})".encode("ascii")
     if marker not in path.read_bytes():
         raise RuntimeError(
             "firmware version does not match project commit: "
@@ -122,12 +161,16 @@ def verify_embedded_commit(path: Path, project_commit: str) -> None:
         )
 
 
-def verify_config(path: Path) -> None:
+def verify_config(
+    path: Path,
+    required_config: set[str] = REQUIRED_CONFIG,
+    forbidden_config: set[str] = FORBIDDEN_CONFIG,
+) -> None:
     lines = set(path.read_text(encoding="utf-8").splitlines())
-    missing = sorted(REQUIRED_CONFIG - lines)
+    missing = sorted(required_config - lines)
     if missing:
         raise RuntimeError("configuration contract: " + " | ".join(missing))
-    forbidden = sorted(FORBIDDEN_CONFIG & lines)
+    forbidden = sorted(forbidden_config & lines)
     if forbidden:
         raise RuntimeError(
             "forbidden configuration: " + " | ".join(forbidden)
@@ -155,7 +198,8 @@ def generate_kconfig(root: Path, sdk_root: Path, env: dict[str, str]) -> None:
     run(
         [sys.executable, mkkconfig, "-m", "ArduPilot Spresense bring-up",
          "-o", spresense_home / "Kconfig",
-         spresense_home / "copter_app", spresense_home / "m1_gcs_app"],
+         spresense_home / "copter_app", spresense_home / "rover_app",
+         spresense_home / "m1_gcs_app"],
         cwd=sdk,
         env=env,
     )
@@ -188,7 +232,9 @@ def compiler_library(
     return path
 
 
-def parse_nm(lines: list[str]) -> tuple[set[str], list[str]]:
+def parse_nm(
+    lines: list[str], entry: str = "arducopter_spresense_main"
+) -> tuple[set[str], list[str]]:
     symbols = set()
     entries = []
     for line in lines:
@@ -197,7 +243,7 @@ def parse_nm(lines: list[str]) -> tuple[set[str], list[str]]:
             continue
         name = fields[-1]
         symbols.add(name)
-        if name == "arducopter_spresense_main":
+        if name == entry:
             entries.append(line)
     return symbols, entries
 
@@ -219,7 +265,7 @@ def prepare_generated_newlib_link(nuttx: Path) -> None:
     (nuttx / "include/newlib").symlink_to(include, target_is_directory=True)
 
 
-def parser() -> argparse.ArgumentParser:
+def parser(default_vehicle: str = "copter") -> argparse.ArgumentParser:
     value = argparse.ArgumentParser(description=__doc__)
     value.add_argument(
         "--allow-dirty",
@@ -232,11 +278,18 @@ def parser() -> argparse.ArgumentParser:
         help="reuse current Waf archives and Sony configuration for iteration",
     )
     value.add_argument("--jobs", type=int, default=2)
+    value.add_argument(
+        "--vehicle",
+        choices=sorted(VEHICLES),
+        default=default_vehicle,
+        help="vehicle archive and dedicated NuttX profile to build",
+    )
     return value
 
 
-def main() -> int:
-    arguments = parser().parse_args()
+def main(default_vehicle: str = "copter") -> int:
+    arguments = parser(default_vehicle).parse_args()
+    vehicle = VEHICLES[arguments.vehicle]
     root = Path(__file__).resolve().parents[2]
     sdk_root = root / "modules/Spresense"
     sdk = sdk_root / "sdk"
@@ -246,17 +299,36 @@ def main() -> int:
     cxx = toolchain / "arm-none-eabi-g++"
     nm = toolchain / "arm-none-eabi-nm"
     python = shutil.which("python3.11") or sys.executable
-    archive = root / "build/spresense/lib/bin/libarducopter.a"
-    libraries = root / "build/spresense/lib/libArduCopter_libs.a"
+    archive = root / vehicle["archive"]
+    libraries = root / vehicle["libraries"]
     hal_sdk_archive = (
-        root / "build/spresense-m1-copter-link-sdk"
+        root / vehicle["sdk_build"]
         / "libAP_HAL_Spresense_sdk.a"
     )
-    artifact_dir = root / ARTIFACT_DIRECTORY
+    artifact_dir = root / vehicle["artifact_directory"]
     env = os.environ.copy()
     env["PATH"] = f"{toolchain}:{env.get('PATH', '')}"
     env["SPRESENSE_HOME"] = str(root / "Tools/spresense")
     env["GCCVER"] = "10"
+    env["SPRESENSE_AP_MAIN"] = vehicle["entry"]
+
+    required_config = set(REQUIRED_CONFIG)
+    required_config.remove("CONFIG_SPRESENSE_M1_COPTER_LINK=y")
+    required_config.remove(
+        'CONFIG_INIT_ENTRYPOINT="arducopter_spresense_main"')
+    required_config.update(
+        {
+            vehicle["link_config"],
+            f'CONFIG_INIT_ENTRYPOINT="{vehicle["entry"]}"',
+        }
+    )
+    required_symbols = set(REQUIRED_SYMBOLS)
+    required_symbols.remove("arducopter_spresense_main")
+    required_symbols.remove(
+        "_ZN16AP_Arming_Copter3armEN9AP_Arming6MethodEb")
+    required_symbols.update(
+        {vehicle["entry"], vehicle["arming_symbol"]}
+    )
 
     try:
         if arguments.jobs < 1 or arguments.jobs > 8:
@@ -276,10 +348,12 @@ def main() -> int:
         if sdk_commit != SDK_COMMIT:
             raise RuntimeError(f"Sony SDK commit mismatch: {sdk_commit}")
         project_commit = git_value(root, "rev-parse", "HEAD")
-        upstream_commit = git_value(root, "rev-parse", "Copter-4.7.0^{}")
+        upstream_commit = git_value(
+            root, "rev-parse", f'{vehicle["tag"]}^{{}}')
         if upstream_commit != UPSTREAM_COMMIT:
             raise RuntimeError(
-                f"upstream Copter baseline mismatch: {upstream_commit}"
+                f"upstream {arguments.vehicle} baseline mismatch: "
+                f"{upstream_commit}"
             )
         mavlink_commit = git_value(root / "modules/mavlink", "rev-parse", "HEAD")
         expected_mavlink = git_value(
@@ -300,7 +374,7 @@ def main() -> int:
             )
 
         run(
-            [sys.executable, root / "Tools/spresense/verify_m1_copter_contract.py"],
+            [sys.executable, root / "Tools/spresense" / vehicle["contract"]],
             cwd=root,
             env=env,
         )
@@ -323,19 +397,20 @@ def main() -> int:
         # ArduPilot version contains the project commit and is part of the
         # runtime/artifact identity guard.
         run(
-            [python, root / "waf", "copter", "--targets",
-             "bin/arducopter", f"-j{arguments.jobs}"],
+            [python, root / "waf", vehicle["waf_vehicle"], "--targets",
+             vehicle["waf_target"], f"-j{arguments.jobs}"],
             cwd=root,
             env=env,
         )
         if not arguments.reuse_build:
             generate_kconfig(root, sdk_root, env)
             run(
-                [sys.executable, "tools/config.py", "default", CONFIG],
+                [sys.executable, "tools/config.py", "default",
+                 vehicle["config"]],
                 cwd=sdk,
                 env=env,
             )
-        verify_config(nuttx / ".config")
+        verify_config(nuttx / ".config", required_config, FORBIDDEN_CONFIG)
 
         libgcc = compiler_library(
             compiler, "--print-libgcc-file-name", root, env
@@ -348,7 +423,7 @@ def main() -> int:
         # its archive step on every firmware link so --reuse-build is equally
         # deterministic.
         for generated in (
-            root / "Tools/spresense/copter_app/.built",
+            root / "Tools/spresense" / vehicle["app_directory"] / ".built",
             root / "Tools/spresense/.built",
             hal_sdk_archive,
             Path(f"{hal_sdk_archive}.lock"),
@@ -394,7 +469,8 @@ def main() -> int:
         for source in sources.values():
             if not source.is_file():
                 raise RuntimeError(f"build output is missing: {source}")
-        verify_embedded_commit(sources["nuttx"], project_commit)
+        verify_embedded_commit(
+            sources["nuttx"], project_commit, vehicle["firmware_name"])
         artifact_dir.mkdir(parents=True, exist_ok=True)
         for name, source in sources.items():
             shutil.copy2(source, artifact_dir / name)
@@ -402,20 +478,21 @@ def main() -> int:
         map_report = artifact_dir / "memory-layout.json"
         run(
             [sys.executable, root / "Tools/spresense/verify_m1_copter_map.py",
-             "--map", artifact_dir / "nuttx.map", "--output", map_report],
+             "--map", artifact_dir / "nuttx.map", "--output", map_report,
+             "--vehicle", arguments.vehicle],
             cwd=root,
             env=env,
         )
         nm_lines = run(
             [nm, artifact_dir / "nuttx"], cwd=root, env=env, capture=True
         ).stdout.splitlines()
-        symbols, entries = parse_nm(nm_lines)
+        symbols, entries = parse_nm(nm_lines, vehicle["entry"])
         if len(entries) != 1 or " T " not in f" {entries[0]} ":
             raise RuntimeError(
-                "arducopter_spresense_main is not unique/strong: "
+                f'{vehicle["entry"]} is not unique/strong: '
                 f"{entries}"
             )
-        missing = sorted(REQUIRED_SYMBOLS - symbols)
+        missing = sorted(required_symbols - symbols)
         if missing:
             raise RuntimeError("required symbol missing: " + " | ".join(missing))
         forbidden = sorted(FORBIDDEN_SYMBOLS & symbols)
@@ -439,17 +516,17 @@ def main() -> int:
 
         memory = json.loads(map_report.read_text(encoding="utf-8"))
         manifest_values = {
-            "profile": PROFILE,
+            "profile": vehicle["profile"],
             "project_commit": project_commit,
             "project_tree": "dirty" if dirty else "clean",
             "upstream_commit": UPSTREAM_COMMIT,
             "sdk_commit": SDK_COMMIT,
             "mavlink_commit": mavlink_commit,
             "gcc_version": gcc_version,
-            "m1.copter.full": "true",
-            "m1.copter.entry": "arducopter_spresense_main",
-            "m1.copter.scheduler": "nuttx-pthread",
-            "m1.copter.loop_rate_default_hz": "100",
+            f"m1.{arguments.vehicle}.full": "true",
+            f"m1.{arguments.vehicle}.entry": vehicle["entry"],
+            f"m1.{arguments.vehicle}.scheduler": "nuttx-pthread",
+            f"m1.{arguments.vehicle}.loop_rate_default_hz": "100",
             "m1.gcs.transport": "/dev/ttyS0@115200",
             "m1.gnss.builtin": "disabled",
             "m1.gnss.addon": "required",
@@ -470,7 +547,241 @@ def main() -> int:
             "m1.sensor.hal_integration": "GNSS+INS",
             "m1.sensor.runtime": "hardware-HOLD",
             "m1.sensor_fallback": "disabled",
+            "m1.rover.frame": (
+                "regular-front-steering" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.chassis": (
+                "tamiya-cc02" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.chassis_scale": (
+                "1/10" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.frame_construction": (
+                "ladder-frame" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.motor_layout": (
+                "longitudinal-front-mid" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.drivetrain": (
+                "shaft-driven-4wd-single-esc"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.drive_transfer": (
+                "gearbox-propeller-shafts-front-and-rear"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.differential_type": (
+                "front-and-rear-3-bevel"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.differential_configuration": (
+                "hardware-HOLD-not-inspected"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.suspension": (
+                "front-and-rear-4-link-rigid"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.dampers": (
+                "front-and-rear-CVA-oil"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.wheelbase_mm": (
+                "252" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.wheelbase_status": (
+                "official-cc02m-nominal-user-adopted"
+                if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.official_reference_model": (
+                "tamiya-land-cruiser-40-cc02m-item-58715"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.official_reference_status": (
+                "official-cc02m-90mm-nominal-user-adopted"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.official_reference_wheelbase_class": (
+                "CC-02M" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.official_reference_wheelbase_mm": (
+                "252" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.wheelbase_reference_delta_mm": (
+                "0" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.official_reference_front_track_mm": (
+                "164" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.official_reference_rear_track_mm": (
+                "167" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.front_track_mm": (
+                "164" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.rear_track_mm": (
+                "167" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.track_status": (
+                "official-cc02m-nominal-user-adopted"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.tire_diameter_mm": (
+                "90" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.tire_diameter_status": (
+                "official-cc02m-nominal-user-adopted"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.official_reference_tire_width_mm": (
+                "33" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.tire_width_mm": (
+                "33" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.tire_width_status": (
+                "official-cc02m-nominal-user-adopted"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.loaded_rolling_circumference_mm": (
+                "hardware-HOLD-unmeasured"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.official_reference_kit_standard_pinion_teeth": (
+                "16" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.official_reference_kit_standard_gear_ratio": (
+                "17.33" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.official_supported_gear_ratio_min": (
+                "11.09" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.official_supported_gear_ratio_max": (
+                "29.28" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.installed_pinion_teeth": (
+                "hardware-HOLD-unverified"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.installed_gear_ratio": (
+                "hardware-HOLD-unverified"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.gear_ratio_status": (
+                "hardware-HOLD-installed-configuration-unverified"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.official_reference_kit_motor_class": (
+                "RS540" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.official_reference_esc": (
+                "separately-required" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.installed_motor": (
+                "13.5T-brushless"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.installed_motor_type": (
+                "brushless" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.installed_motor_turns": (
+                "13.5" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.installed_motor_status": (
+                "user-specified-model-unverified"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.installed_esc": (
+                "hardware-HOLD-unverified"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.steering_top_view_displacement_mm": (
+                "50" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.steering_displacement_span": (
+                "lock-to-lock" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.steering_displacement_reference": (
+                "tire-leading-edge"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.steering_displacement_status": (
+                "user-specified"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.steering_angle_deg": (
+                "30" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.steering_angle_status": (
+                "user-selected-nominal-not-measured"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.turn_radius_m": (
+                "0.436" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.turn_radius_model": (
+                "wheelbase-over-tan-steering-angle"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.turn_radius_status": (
+                "calculated-not-measured"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.steering_function": (
+                "GroundSteering/CH1" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.throttle_function": (
+                "Throttle/CH3" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.shadow_output": (
+                "hal-readback-only" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.gcs.mission_protocol": (
+                "reversible-upload-download-restore"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.gcs.autonomy_sequence": (
+                "hardware-dry-run-plus-sitl"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.gcs.autonomous_motion": (
+                "sitl-only" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
             "m1.outputs": "disabled",
+            "m1.outputs.shadow_readback": "enabled",
             "m1.arming": "always-denied",
             "m1.physical_write_expected": "0",
             "m1.storage.development": "microSD",
@@ -507,11 +818,14 @@ def main() -> int:
     ) as error:
         if (nuttx / "include/newlib").is_symlink():
             (nuttx / "include/newlib").unlink()
-        print(f"spresense_m1_copter_build=FAIL reason={error}", file=sys.stderr)
+        print(
+            f"spresense_m1_{arguments.vehicle}_build=FAIL reason={error}",
+            file=sys.stderr,
+        )
         return 1
 
     print(
-        "spresense_m1_copter_build=PASS "
+        f"spresense_m1_{arguments.vehicle}_build=PASS "
         f"project_commit={project_commit} "
         f"tree={'dirty' if dirty else 'clean'} gcc={gcc_version} "
         f"artifact_dir={artifact_dir} sensors=GNSS+INS"

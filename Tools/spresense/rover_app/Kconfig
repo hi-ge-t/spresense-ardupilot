@@ -1,0 +1,24 @@
+config SPRESENSE_M1_ROVER_LINK
+	bool "Spresense M1 output-disabled ArduRover link"
+	default n
+	depends on CXD56_GNSS_RAM && CXD56_GNSS_HEAP
+	depends on CXD56_GNSS_ADDON && SENSORS_CXD5610_GNSS
+	depends on SENSORS_CXD5602PWBIMU
+	depends on !CXD56_GNSS
+	---help---
+		Link the real ArduRover vehicle archive with AP_HAL_Spresense for
+		the regular front-steering M1 software gate. PWM, actuator output
+		and arming remain compile-time disabled. This option alone does not
+		make vehicle-ready firmware.
+
+if SPRESENSE_M1_ROVER_LINK
+
+config SPRESENSE_M1_ROVER_GNSS_DEVICE
+	string "CXD5610 GNSS Add-on device"
+	default "/dev/gps2"
+
+config SPRESENSE_M1_ROVER_PWBIMU_DEVICE
+	string "CXD5602PWBIMU device"
+	default "/dev/imu0"
+
+endif
