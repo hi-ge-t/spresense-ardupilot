@@ -14,11 +14,10 @@
 > [Spresense M1 bring-up](docs/SPRESENSE_M1.md).
 >
 > A separate output-disabled ArduRover artifact now links the full Rover 4.7.0
-> archive for a Tamiya CC-02 target with a user-specified 250 mm wheelbase and
-> approximately 90 mm tires; 30 degrees per side is the nominal steering
-> setting and the calculated 0.433 m bicycle-model radius remains unmeasured:
-> the nearest official catalog reference is CC-02M at 252 mm, with catalog
-> tread/tire/gearing values kept separate from unmeasured installed values.
+> archive for a Tamiya CC-02M target using the adopted nominal 252 mm
+> wheelbase, 164/167 mm tread and 33/90 mm tires. A user-specified 13.5T
+> brushless motor is installed; 30 degrees per side is the nominal steering
+> setting and the calculated 0.436 m bicycle-model radius remains unmeasured.
 > CH1/GroundSteering and CH3/Throttle for its single-ESC 4WD drivetrain. A
 > combined Multi-IMU/GNSS Add-on hardware gate confirmed the
 > ground-rover heartbeat, live sensor ingestion, CH1/CH3 dry-run mapping and

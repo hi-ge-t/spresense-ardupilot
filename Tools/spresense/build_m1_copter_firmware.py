@@ -592,11 +592,12 @@ def main(default_vehicle: str = "copter") -> int:
                 if arguments.vehicle == "rover" else "not-applicable"
             ),
             "m1.rover.wheelbase_mm": (
-                "250" if arguments.vehicle == "rover"
+                "252" if arguments.vehicle == "rover"
                 else "not-applicable"
             ),
             "m1.rover.wheelbase_status": (
-                "user-specified-target" if arguments.vehicle == "rover"
+                "official-cc02m-nominal-user-adopted"
+                if arguments.vehicle == "rover"
                 else "not-applicable"
             ),
             "m1.rover.official_reference_model": (
@@ -604,7 +605,7 @@ def main(default_vehicle: str = "copter") -> int:
                 if arguments.vehicle == "rover" else "not-applicable"
             ),
             "m1.rover.official_reference_status": (
-                "official-cc02m-90mm-kit-reference-not-installed-configuration"
+                "official-cc02m-90mm-nominal-user-adopted"
                 if arguments.vehicle == "rover" else "not-applicable"
             ),
             "m1.rover.official_reference_wheelbase_class": (
@@ -616,7 +617,7 @@ def main(default_vehicle: str = "copter") -> int:
                 else "not-applicable"
             ),
             "m1.rover.wheelbase_reference_delta_mm": (
-                "-2" if arguments.vehicle == "rover"
+                "0" if arguments.vehicle == "rover"
                 else "not-applicable"
             ),
             "m1.rover.official_reference_front_track_mm": (
@@ -628,15 +629,15 @@ def main(default_vehicle: str = "copter") -> int:
                 else "not-applicable"
             ),
             "m1.rover.front_track_mm": (
-                "hardware-HOLD-unmeasured"
-                if arguments.vehicle == "rover" else "not-applicable"
+                "164" if arguments.vehicle == "rover"
+                else "not-applicable"
             ),
             "m1.rover.rear_track_mm": (
-                "hardware-HOLD-unmeasured"
-                if arguments.vehicle == "rover" else "not-applicable"
+                "167" if arguments.vehicle == "rover"
+                else "not-applicable"
             ),
             "m1.rover.track_status": (
-                "hardware-HOLD-unmeasured-official-reference-available"
+                "official-cc02m-nominal-user-adopted"
                 if arguments.vehicle == "rover" else "not-applicable"
             ),
             "m1.rover.tire_diameter_mm": (
@@ -644,7 +645,7 @@ def main(default_vehicle: str = "copter") -> int:
                 else "not-applicable"
             ),
             "m1.rover.tire_diameter_status": (
-                "user-specified-approximate"
+                "official-cc02m-nominal-user-adopted"
                 if arguments.vehicle == "rover" else "not-applicable"
             ),
             "m1.rover.official_reference_tire_width_mm": (
@@ -652,11 +653,11 @@ def main(default_vehicle: str = "copter") -> int:
                 else "not-applicable"
             ),
             "m1.rover.tire_width_mm": (
-                "hardware-HOLD-unmeasured"
-                if arguments.vehicle == "rover" else "not-applicable"
+                "33" if arguments.vehicle == "rover"
+                else "not-applicable"
             ),
             "m1.rover.tire_width_status": (
-                "hardware-HOLD-unmeasured-official-reference-available"
+                "official-cc02m-nominal-user-adopted"
                 if arguments.vehicle == "rover" else "not-applicable"
             ),
             "m1.rover.loaded_rolling_circumference_mm": (
@@ -700,7 +701,19 @@ def main(default_vehicle: str = "copter") -> int:
                 else "not-applicable"
             ),
             "m1.rover.installed_motor": (
-                "hardware-HOLD-unverified"
+                "13.5T-brushless"
+                if arguments.vehicle == "rover" else "not-applicable"
+            ),
+            "m1.rover.installed_motor_type": (
+                "brushless" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.installed_motor_turns": (
+                "13.5" if arguments.vehicle == "rover"
+                else "not-applicable"
+            ),
+            "m1.rover.installed_motor_status": (
+                "user-specified-model-unverified"
                 if arguments.vehicle == "rover" else "not-applicable"
             ),
             "m1.rover.installed_esc": (
@@ -732,7 +745,7 @@ def main(default_vehicle: str = "copter") -> int:
                 if arguments.vehicle == "rover" else "not-applicable"
             ),
             "m1.rover.turn_radius_m": (
-                "0.433" if arguments.vehicle == "rover"
+                "0.436" if arguments.vehicle == "rover"
                 else "not-applicable"
             ),
             "m1.rover.turn_radius_model": (

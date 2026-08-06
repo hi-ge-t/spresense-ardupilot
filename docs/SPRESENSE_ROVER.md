@@ -5,7 +5,7 @@
 This profile links the full ArduRover 4.7.0 vehicle archive to the existing
 output-disabled `AP_HAL_Spresense`. It targets a conventional four-wheel RC
 car with front steering and one drivetrain throttle channel. The selected
-vehicle is a Tamiya CC-02 with a user-specified 250 mm wheelbase and a
+vehicle is a Tamiya CC-02M using the adopted nominal 252 mm wheelbase and a
 shaft-driven 4WD drivetrain. It is a software and
 output-disabled hardware feasibility artifact, not drive-ready firmware. One
 combined-board sensor/command hardware gate passed on the original Rover
@@ -44,30 +44,26 @@ The vehicle target is fixed as follows:
 | Motor/driveline layout | longitudinal front-mid motor, gearbox and propeller shafts to both axles | CC-02 chassis specification |
 | Differentials | front/rear 3-bevel | type is from the CC-02 specification; installed open/locked state is unverified |
 | Suspension/dampers | front/rear 4-link rigid axles with CVA oil dampers | CC-02 chassis specification |
-| Wheelbase | 250 mm (`0.250 m`) | user-specified target |
-| Nearest official wheelbase class | CC-02M, 252 mm | official reference; installed configuration is not identified by item number |
-| Official-reference tread | front 164 mm, rear 167 mm | Item 58715 CC-02M/90 mm tire reference; actual tread is unmeasured |
-| Tire diameter | approximately 90 mm (`0.090 m`) | user-specified estimate |
-| Official-reference tire width | 33 mm | Item 58715 reference; actual tire width is unmeasured |
+| Wheelbase | 252 mm (`0.252 m`) | official CC-02M nominal; adopted by user direction |
+| Tread | front 164 mm, rear 167 mm | official CC-02M/90 mm tire nominal; adopted by user direction |
+| Tire size | 33 mm width × 90 mm diameter | official CC-02M nominal; adopted by user direction |
 | Loaded rolling circumference | TODO: unmeasured loaded rolling circumference | HOLD |
 | Official-reference pinion/gear ratio | 16T / 17.33:1 | Item 58715 kit standard; installed gearing is unverified |
 | Official selectable gear-ratio range | 11.09:1 to 29.28:1 | CC-02 chassis capability; installed ratio is unverified |
-| Official-reference motor/ESC | RS540 / ESC separately required | Item 58715 kit specification; installed motor and ESC are unverified |
+| Installed motor | 13.5T brushless | user-specified; manufacturer/model/KV are unverified |
+| Official-reference motor/ESC | RS540 / ESC separately required | Item 58715 kit reference only; not the installed motor specification |
+| Installed ESC | TODO: model and rating unverified | HOLD |
 | Top-view steering displacement | 50 mm lock-to-lock | user-specified |
 | Steering displacement reference | tire leading edge | user-specified |
 | Nominal road-wheel steering angle | 30 degrees per side | user-selected setting; not angle-measured |
-| Bicycle-model turn radius | 0.433 m | calculated model value, not a measured turning radius |
+| Bicycle-model turn radius | 0.436 m | calculated model value, not a measured turning radius |
 | Actual minimum turning radius | TODO: unmeasured turning radius | HOLD |
 
-The official reference is the Tamiya Toyota Land Cruiser 40 CC-02M kit,
-Item 58715, because its official 252 mm wheelbase and 33/90 mm tires are the
-closest published match to the user-specified 250 mm and approximately 90 mm.
-This does not assert that the installed kit is Item 58715. In particular,
-CC-02 wheels and tires vary between kits, so the 164/167 mm tread and 33 mm
-tire width remain reference values until measured on the actual vehicle. The
-2 mm difference between the user target and official CC-02M wheelbase is
-retained explicitly; the software does not silently replace 250 mm with
-252 mm. The official source is
+The nominal geometry source is the Tamiya Toyota Land Cruiser 40 CC-02M kit,
+Item 58715. At the user's direction, its official 252 mm wheelbase, 164/167 mm
+tread and 33/90 mm tire values are now the active configuration contract rather
+than reference-only values. This does not assert that the installed kit is
+Item 58715 or that on-vehicle dimensions were measured. The official source is
 [Tamiya Item 58715](https://www.tamiya.com/japan/products/58715/index.html),
 while the common ladder-frame, driveline and suspension construction is also
 described on the
@@ -77,8 +73,8 @@ they depend on the selected body, wheels, suspension setup and installed
 electronics, and the available chassis specification does not establish the
 actual vehicle values.
 
-The nominal model uses `R = L / tan(delta)` with `L = 0.250 m` and
-`delta = 30 degrees`, giving `R = 0.433 m`. This is a centerline bicycle-model
+The nominal model uses `R = L / tan(delta)` with `L = 0.252 m` and
+`delta = 30 degrees`, giving `R = 0.436 m`. This is a centerline bicycle-model
 estimate. It does not include inner/outer Ackermann angle differences, linkage
 compliance, tire slip or mechanical endpoint error, and is not accepted as an
 actual minimum turning-radius measurement. For the later restrained geometry
@@ -86,11 +82,13 @@ gate, measure the actual road-wheel angles and driven path after the servo horn,
 linkage, endpoints and mechanical stops are installed. Until then, do not
 apply the model radius as a validated control parameter and do not enable
 steering output. The
-250 mm wheelbase and approximate 90 mm tire diameter are configuration inputs
-supplied by the user, not measurements made by this software task. A nominal
+252 mm wheelbase and 33/90 mm tire size are adopted official nominal
+configuration inputs, not measurements made by this software task. A nominal
 90 mm circle has a calculated circumference of about 282.7 mm, but tire
 deflection, tread and surface slip make that unsuitable as validated odometry
 or speed calibration. Measure loaded rolling circumference separately. The
+installed motor is recorded as the user-specified 13.5T brushless motor, but
+manufacturer, model, KV, voltage rating and matched ESC remain unverified. The
 reported 50 mm top-view steering displacement is preserved as a lock-to-lock
 raw input measured at the tire leading edge. Together with the nominal 90 mm
 diameter it geometrically suggests about 33.7 degrees per side under a centered

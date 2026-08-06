@@ -9,14 +9,16 @@ measurements:
 
 | Property | Value | Evidence level |
 |---|---:|---|
-| Wheelbase | 250 mm | user-specified target |
-| Tire diameter | approximately 90 mm | user-specified estimate |
+| Wheelbase | 252 mm | official CC-02M nominal; user-adopted |
+| Tread | front 164 mm, rear 167 mm | official CC-02M nominal; user-adopted |
+| Tire size | 33/90 mm | official CC-02M nominal; user-adopted |
+| Installed motor | 13.5T brushless | user-specified; model/KV unverified |
 | Steering displacement | 50 mm lock-to-lock at tire leading edge | user-specified raw input |
 | Nominal steering angle | 30 degrees per side | user-selected setting; not angle-measured |
 | Nominal tire circumference | 282.7 mm | calculated; not loaded rolling circumference |
-| Bicycle-model turn radius | 0.433 m | calculated; not measured driving radius |
+| Bicycle-model turn radius | 0.436 m | calculated; not measured driving radius |
 
-The radius uses `R = L / tan(delta)` with `L = 0.250 m` and
+The radius uses `R = L / tan(delta)` with `L = 0.252 m` and
 `delta = 30 degrees`. It excludes Ackermann inner/outer angle differences,
 linkage compliance, tire deformation and surface slip. The model value must
 not be represented as a measured minimum turning radius or applied as a
@@ -24,7 +26,7 @@ validated driving parameter.
 
 ## Official CC-02 reference
 
-The closest official published configuration to the user inputs is the
+The adopted official nominal source configuration is the
 1/10-scale Tamiya Toyota Land Cruiser 40 CC-02M, Item 58715. Its official
 specification records a 252 mm wheelbase, 164 mm front and 167 mm rear tread,
 33/90 mm tires, ladder frame, longitudinal motor and shaft-driven 4WD,
@@ -36,12 +38,12 @@ separately required ESC. The generic chassis page lists selectable ratios from
 - https://www.tamiya.com/japan/products/58715/index.html
 - https://www.tamiya.com/japan/products/product_info_ex.html?genre_item=6502%2Crc_base
 
-These are reference values, not an identification of the installed kit. The
-actual 250 mm user target remains authoritative for the current geometry
-model. Actual front/rear tread, tire width, installed pinion and ratio, motor,
-ESC and differential open/locked state remain hardware HOLD. This prevents a
-body-, wheel- or build-dependent catalog value from being promoted to measured
-vehicle evidence.
+At the user's direction, the official wheelbase, tread and tire values are now
+the active nominal configuration. They remain catalog values rather than
+on-vehicle measurements. The installed motor is user-specified as a 13.5T
+brushless motor; manufacturer, model, KV and voltage rating remain unverified.
+Installed pinion and ratio, ESC and differential open/locked state remain
+hardware HOLD.
 
 ## Machine-readable contract
 
@@ -59,17 +61,21 @@ m1.rover.differential_type=front-and-rear-3-bevel
 m1.rover.differential_configuration=hardware-HOLD-not-inspected
 m1.rover.suspension=front-and-rear-4-link-rigid
 m1.rover.dampers=front-and-rear-CVA-oil
-m1.rover.wheelbase_mm=250
+m1.rover.wheelbase_mm=252
+m1.rover.wheelbase_status=official-cc02m-nominal-user-adopted
 m1.rover.official_reference_wheelbase_class=CC-02M
 m1.rover.official_reference_wheelbase_mm=252
-m1.rover.wheelbase_reference_delta_mm=-2
+m1.rover.wheelbase_reference_delta_mm=0
 m1.rover.official_reference_front_track_mm=164
 m1.rover.official_reference_rear_track_mm=167
-m1.rover.front_track_mm=hardware-HOLD-unmeasured
-m1.rover.rear_track_mm=hardware-HOLD-unmeasured
+m1.rover.front_track_mm=164
+m1.rover.rear_track_mm=167
+m1.rover.track_status=official-cc02m-nominal-user-adopted
 m1.rover.tire_diameter_mm=90
+m1.rover.tire_diameter_status=official-cc02m-nominal-user-adopted
 m1.rover.official_reference_tire_width_mm=33
-m1.rover.tire_width_mm=hardware-HOLD-unmeasured
+m1.rover.tire_width_mm=33
+m1.rover.tire_width_status=official-cc02m-nominal-user-adopted
 m1.rover.loaded_rolling_circumference_mm=hardware-HOLD-unmeasured
 m1.rover.official_reference_kit_standard_pinion_teeth=16
 m1.rover.official_reference_kit_standard_gear_ratio=17.33
@@ -79,14 +85,17 @@ m1.rover.installed_pinion_teeth=hardware-HOLD-unverified
 m1.rover.installed_gear_ratio=hardware-HOLD-unverified
 m1.rover.official_reference_kit_motor_class=RS540
 m1.rover.official_reference_esc=separately-required
-m1.rover.installed_motor=hardware-HOLD-unverified
+m1.rover.installed_motor=13.5T-brushless
+m1.rover.installed_motor_type=brushless
+m1.rover.installed_motor_turns=13.5
+m1.rover.installed_motor_status=user-specified-model-unverified
 m1.rover.installed_esc=hardware-HOLD-unverified
 m1.rover.steering_top_view_displacement_mm=50
 m1.rover.steering_displacement_span=lock-to-lock
 m1.rover.steering_displacement_reference=tire-leading-edge
 m1.rover.steering_angle_deg=30
 m1.rover.steering_angle_status=user-selected-nominal-not-measured
-m1.rover.turn_radius_m=0.433
+m1.rover.turn_radius_m=0.436
 m1.rover.turn_radius_model=wheelbase-over-tan-steering-angle
 m1.rover.turn_radius_status=calculated-not-measured
 ```
@@ -114,8 +123,8 @@ output operation was performed for this evidence.
 ## Remaining geometry HOLD
 
 - loaded rolling circumference;
-- actual front and rear tread and tire width;
-- installed pinion, final gear ratio, motor and ESC;
+- installed pinion, final gear ratio and ESC;
+- installed motor manufacturer/model/KV/voltage rating and ESC;
 - front/rear differential open or locked configuration;
 - actual inner and outer road-wheel angles at servo endpoints;
 - measured minimum turning radius under load;
