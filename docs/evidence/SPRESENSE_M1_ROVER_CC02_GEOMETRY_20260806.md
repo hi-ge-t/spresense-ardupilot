@@ -105,11 +105,11 @@ or reclassifies these values.
 
 ## Host and Sony cross-build result — PASS
 
-- tested commit: `209624b7dd131a05aa474b7f85160204e9b50511`
+- tested commit: `bd7729c06d7ae69b07319295bb631cc059158de9`
 - project tree: clean
 - Sony ARM GCC: 10.3.1
 - `nuttx.spk` SHA-256:
-  `e7ac35b4249c8c85b7c705ea482d5f19a56d51b033819887a17ea985316156a6`
+  `89ddd9c30fcb50f91a675afcd606b868c367ba476b450703dcec4534eab5a036`
 - host regression: PASS, outputs disabled and physical writes zero
 - Application SRAM heap envelope: 608176 bytes
 - GNSS RAM heap: 655360 bytes, complete region

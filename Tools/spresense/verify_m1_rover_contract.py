@@ -483,8 +483,8 @@ def main() -> int:
         "cc02-geometry-evidence",
         geometry_evidence,
         (
-            "209624b7dd131a05aa474b7f85160204e9b50511",
-            "e7ac35b4249c8c85b7c705ea482d5f19a56d51b033819887a17ea985316156a6",
+            "bd7729c06d7ae69b07319295bb631cc059158de9",
+            "89ddd9c30fcb50f91a675afcd606b868c367ba476b450703dcec4534eab5a036",
             "m1.rover.wheelbase_mm=252",
             "m1.rover.wheelbase_status=official-cc02m-nominal-user-adopted",
             "m1.rover.official_reference_wheelbase_class=CC-02M",
